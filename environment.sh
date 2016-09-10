@@ -1,0 +1,5 @@
+export LLVM_INSTALL=$HOME/opt/llvm-install
+export LLVM_LIB=$LLVM_INSTALL/lib
+export LLVM_BIN=$LLVM_INSTALL/bin
+export LD_LIBRARY_PATH=$LLVM_LIB:$LD_LIBRARY_PATH
+export PATH=$LLVM_BIN:$PATH
