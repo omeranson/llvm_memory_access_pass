@@ -3,8 +3,12 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <MemoryAccessInstVisitor.h>
+
 namespace MemoryAccessPass {
 	class MemoryAccess : public llvm::FunctionPass {
+	private:
+		MemoryAccessInstVisitor * visitor;
 	public:
 		static char ID;
 		MemoryAccess();

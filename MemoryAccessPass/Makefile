@@ -1,10 +1,13 @@
-OBJS = src/MemoryAccess.o src/MemoryAccessInstVisitor.o
+BASE = MemoryAccess MemoryAccessInstVisitor
+OBJS = $(foreach BASEFILE,$(BASE),src/$(BASEFILE).o)
+#OBJS = src/MemoryAccess.o src/MemoryAccessInstVisitor.o
+INCLUDES = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h)
 
 LLVM_INSTALL?=${HOME}/opt/llvm-install
 CXXFLAGS=$(shell ${LLVM_INSTALL}/bin/llvm-config --cxxflags)
 CXXFLAGS+= -Iinclude -fPIC -g
 LDFLAGS=$(shell ${LLVM_INSTALL}/bin/llvm-config --ldflags)
-LDFLAGS+= -shared -fPIC 
+LDFLAGS+= -shared -fPIC
 CC=${LLVM_INSTALL}/bin/clang
 CXX=${LLVM_INSTALL}/bin/clang++
 

@@ -16,26 +16,54 @@
 #include <llvm/IR/Constants.h>
 
 #include <MemoryAccess.h>
-#include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
 
 MemoryAccess::MemoryAccess() : llvm::FunctionPass(ID) {}
 
-MemoryAccess::~MemoryAccess() {}
+MemoryAccess::~MemoryAccess() {
+	delete visitor;
+}
 
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
-	llvm::errs() << "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n";
-	llvm::errs() << "MemoryAccess: Function: ";
-	llvm::errs().write_escaped(F.getName()) << '\n';
-	MemoryAccessInstVisitor visitor;
-	visitor.visit(F);
+	visitor = new MemoryAccessInstVisitor();
+	visitor->visit(F);
 	return false;
 }
 		
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
-	// TODO Print here the information gathered.
-	// O << "MemoryAccess analysis for functions\n";
+	MemoryAccessData &data = *(visitor->current);
+	O << "Stores to stack:\n";
+	for (std::vector<const llvm::Instruction *>::iterator it = data.stackStores.begin(),
+			ie = data.stackStores.end();
+			it != ie; it++) {
+		const llvm::StoreInst * si = llvm::cast<llvm::StoreInst>(*it);
+		const llvm::Value * pointer = si->getPointerOperand();
+		O << "\t" << *pointer << "\n";
+	}
+	O << "Stores to globals:\n";
+	for (std::vector<const llvm::Instruction *>::iterator it = data.globalStores.begin(),
+			ie = data.globalStores.end();
+			it != ie; it++) {
+		const llvm::StoreInst * si = llvm::cast<llvm::StoreInst>(*it);
+		const llvm::Value * pointer = si->getPointerOperand();
+		O << "\t" << *pointer << "\n";
+	}
+	O << "Stores to THE UNKNOWN:\n";
+	for (std::vector<const llvm::Instruction *>::iterator it = data.unknownStores.begin(),
+			ie = data.unknownStores.end();
+			it != ie; it++) {
+		const llvm::StoreInst * si = llvm::cast<llvm::StoreInst>(*it);
+		const llvm::Value * pointer = si->getPointerOperand();
+		O << "\t" << *pointer << "\n";
+	}
+	O << "Function calls: Indirect: " << data.indirectFunctionCallCount << "\n";
+	for (std::vector<const llvm::Function *>::iterator it = data.functionCalls.begin(),
+			ie = data.functionCalls.end();
+			it != ie; it++) {
+		const llvm::Function * function = *it;
+		O << "\t" << function->getName() << "\n";
+	}
 }
 
 char MemoryAccess::ID = 0;
