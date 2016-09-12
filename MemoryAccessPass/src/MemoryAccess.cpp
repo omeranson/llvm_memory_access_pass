@@ -19,14 +19,13 @@
 
 namespace MemoryAccessPass {
 
-MemoryAccess::MemoryAccess() : llvm::FunctionPass(ID) {}
+MemoryAccess::MemoryAccess() : llvm::FunctionPass(ID), visitor(new MemoryAccessInstVisitor) {}
 
 MemoryAccess::~MemoryAccess() {
 	delete visitor;
 }
 
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
-	visitor = new MemoryAccessInstVisitor();
 	visitor->visit(F);
 	return false;
 }
