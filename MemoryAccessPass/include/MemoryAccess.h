@@ -1,3 +1,5 @@
+#ifndef MEMORY_ACCESS_H
+#define MEMORY_ACCESS_H
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
@@ -17,3 +19,4 @@ namespace MemoryAccessPass {
 		virtual void print(llvm::raw_ostream &O, const llvm::Module *M) const;
 	};
 }
+#endif // MEMORY_ACCESS_H
