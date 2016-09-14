@@ -17,15 +17,16 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 	const llvm::Value * value = si.getValueOperand();
 	const llvm::BasicBlock * basicBlock = si.getParent();
 	MemoryAccessData & data = this->data[basicBlock];
+	llvm::errs() << "Store instruction: " << si << "\n";
 	if (llvm::isa<llvm::AllocaInst>(pointer)) {
 		MemoryAccessData::StoredValues & values = data.stackStores[pointer];
-		values.insert(value);
+		values.push_back(value);
 	} else if (llvm::isa<llvm::GlobalValue>(pointer)) {
 		MemoryAccessData::StoredValues & values = data.globalStores[pointer];
-		values.insert(value);
+		values.push_back(value);
 	} else {
 		MemoryAccessData::StoredValues & values = data.unknownStores[pointer];
-		values.insert(value);
+		values.push_back(value);
 	}
 }
 
@@ -40,9 +41,32 @@ void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
 	}
 }
 
+
+void MemoryAccessInstVisitor::insertNoDups(
+		MemoryAccessData::StoredValues &fromValues,
+		MemoryAccessData::StoredValues & toValues) const {
+	MemoryAccessData::StoredValues::iterator pos = toValues.begin();
+	MemoryAccessData::StoredValues inserted;
+	for (MemoryAccessData::StoredValues::iterator it = fromValues.begin(),
+							ie = fromValues.end();
+			it != ie; it++) {
+		pos = std::lower_bound(pos, toValues.end(), *it);
+		if (pos == toValues.end()) {
+			inserted.insert(inserted.end(), it, ie);
+			break;
+		}
+		if (*pos == *it) {
+			continue;
+		}
+		inserted.push_back(*it);
+		++pos;
+	}
+	toValues.insert(toValues.end(), inserted.begin(), inserted.end());
+}
+
 bool MemoryAccessInstVisitor::join(
 		MemoryAccessData::StoreBaseToValuesMap & from,
-		MemoryAccessData::StoreBaseToValuesMap & to) {
+		MemoryAccessData::StoreBaseToValuesMap & to) const {
 	bool result = false;
 	for (MemoryAccessData::StoreBaseToValuesMap::iterator it = from.begin(),
 								ie = from.end();
@@ -54,15 +78,17 @@ bool MemoryAccessInstVisitor::join(
 		} else {
 			MemoryAccessData::StoredValues & fromValues = it->second;
 			MemoryAccessData::StoredValues & toValues = found->second;
-			result = result && (std::includes(toValues.begin(), toValues.end(),
+			std::sort(fromValues.begin(), fromValues.end());
+			std::sort(toValues.begin(), toValues.end());
+			result = result || !(std::includes(toValues.begin(), toValues.end(),
 					fromValues.begin(), fromValues.end()));
-			toValues.insert(fromValues.begin(), fromValues.end());
+			insertNoDups(fromValues, toValues);
 		}
 	}
 	return result;
 }
 
-bool MemoryAccessInstVisitor::join(MemoryAccessData & from, MemoryAccessData & to) {
+bool MemoryAccessInstVisitor::join(MemoryAccessData & from, MemoryAccessData & to) const {
 	bool result = join(from.stackStores, to.stackStores) |
 			join(from.globalStores, to.globalStores) |
 			join(from.unknownStores, to.unknownStores);
