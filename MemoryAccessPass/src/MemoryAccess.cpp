@@ -33,54 +33,45 @@ bool MemoryAccess::runOnFunction(llvm::Function &F) {
 	return false;
 }
 		
-void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
-	llvm::BasicBlock * last = &visitor->function->back();
-	MemoryAccessData &data = visitor->data[last];
+void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData::StoreBaseToValuesMap & stores) const {
+	for (MemoryAccessData::StoreBaseToValuesMap::const_iterator it = stores.begin(),
+									ie = stores.end();
+			it != ie; it++) {
+		const llvm::Value * pointer = it->first;
+		O << "\t>" << *pointer << "\n";
+		const MemoryAccessData::StoredValues & values = it->second;
+		for (MemoryAccessData::StoredValues::const_iterator vit = values.begin(),
+									vie = values.end();
+				vit != vie; vit++) {
+			O << "\t\t>" << **vit << "\n";
+		}
+	}
+}
+
+void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) const {
 	O << "Stores to stack:\n";
-	for (MemoryAccessData::StoreBaseToValuesMap::iterator it = data.stackStores.begin(),
-								ie = data.stackStores.end();
-			it != ie; it++) {
-		const llvm::Value * pointer = it->first;
-		O << "\t" << *pointer << "\n";
-		MemoryAccessData::StoredValues & values = it->second;
-		for (MemoryAccessData::StoredValues::iterator vit = values.begin(),
-								vie = values.end();
-				vit != vie; vit++) {
-			O << "\t\t" << **vit << "\n";
-		}
-	}
+	print(O, data.stackStores);
 	O << "Stores to globals:\n";
-	for (MemoryAccessData::StoreBaseToValuesMap::iterator it = data.globalStores.begin(),
-								ie = data.globalStores.end();
-			it != ie; it++) {
-		const llvm::Value * pointer = it->first;
-		O << "\t" << *pointer << "\n";
-		MemoryAccessData::StoredValues & values = it->second;
-		for (MemoryAccessData::StoredValues::iterator vit = values.begin(),
-								vie = values.end();
-				vit != vie; vit++) {
-			O << "\t\t" << **vit << "\n";
-		}
-	}
+	print(O, data.globalStores);
 	O << "Stores to THE UNKNOWN:\n";
-	for (MemoryAccessData::StoreBaseToValuesMap::iterator it = data.unknownStores.begin(),
-								ie = data.unknownStores.end();
+	print(O, data.unknownStores);
+}
+
+void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
+	MemoryAccessData data;
+	for (llvm::Function::iterator it = visitor->function->begin(),
+				ie = visitor->function->end();
 			it != ie; it++) {
-		const llvm::Value * pointer = it->first;
-		O << "\t" << *pointer << "\n";
-		MemoryAccessData::StoredValues & values = it->second;
-		for (MemoryAccessData::StoredValues::iterator vit = values.begin(),
-								vie = values.end();
-				vit != vie; vit++) {
-			O << "\t\t" << **vit << "\n";
-		}
+		MemoryAccessData &bb_data = visitor->data[it];
+		visitor->join(bb_data, data);
 	}
+	print(O, data);
 	O << "Function calls: Indirect: " << visitor->indirectFunctionCallCount << "\n";
 	for (std::vector<const llvm::Function *>::iterator it = visitor->functionCalls.begin(),
-			ie = visitor->functionCalls.end();
+								ie = visitor->functionCalls.end();
 			it != ie; it++) {
 		const llvm::Function * function = *it;
-		O << "\t" << function->getName() << "\n";
+		O << "\t>" << function->getName() << "\n";
 	}
 }
 
