@@ -83,6 +83,7 @@ namespace MemoryAccessPass {
 				visitor.visit(element);
 				populateWorklistWithSuccessors(worklist, *element);
 				worklist.sort(comparator);
+				worklist.unique();
 			}
 		}
 	};
