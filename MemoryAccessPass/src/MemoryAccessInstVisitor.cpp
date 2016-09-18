@@ -5,28 +5,55 @@
 
 namespace MemoryAccessPass {
 
+StoredValue* Evaluator::visitGlobalValue(llvm::GlobalValue & globalValue) {
+	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
+	const llvm::Value * value = &globalValue;
+	StoredValue* result = new StoredValue(value, StoredValueTypeGlobal);
+	m_cache.insert(std::make_pair(value, result));
+	return result;
+}
+
+StoredValue* Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
+	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
+	const llvm::Value * value = &allocaInst;
+	StoredValue* result = new StoredValue(value, StoredValueTypeStack);
+	m_cache.insert(std::make_pair(value, result));
+	return result;
+}
+
+MemoryAccessData::MemoryAccessData() : m_evaluator(temporaries) {}
+MemoryAccessData::~MemoryAccessData() {}
+
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
 		llvm::InstVisitor<MemoryAccessInstVisitor>(), indirectFunctionCallCount(0) {}
+
+MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {}
 
 void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
 	this->function = &function;
 }
 
 void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
-	const llvm::Value * pointer = si.getPointerOperand();
-	const llvm::Value * value = si.getValueOperand();
-	const llvm::BasicBlock * basicBlock = si.getParent();
-	MemoryAccessData & data = this->data[basicBlock];
 	llvm::errs() << "Store instruction: " << si << "\n";
-	if (llvm::isa<llvm::AllocaInst>(pointer)) {
-		MemoryAccessData::StoredValues & values = data.stackStores[pointer];
-		values.push_back(value);
-	} else if (llvm::isa<llvm::GlobalValue>(pointer)) {
-		MemoryAccessData::StoredValues & values = data.globalStores[pointer];
-		values.push_back(value);
+	const llvm::Value * pointer = si.getPointerOperand();
+	llvm::Value * value = si.getValueOperand();
+	const llvm::BasicBlock * basicBlock = si.getParent();
+	MemoryAccessData & data = getData(basicBlock);
+	StoredValue* storedValue = data.m_evaluator.visit(value);
+	if (!storedValue) {
+		llvm::errs() << "storedValue is null for: " << *value << "\n";
+		return;
+	}
+	const StoredValueType valueType = storedValue->type;
+	if (valueType == StoredValueTypeStack) {
+		StoredValues & values = data.stackStores[pointer];
+		values.push_back(storedValue);
+	} else if (valueType == StoredValueTypeGlobal) {
+		StoredValues & values = data.globalStores[pointer];
+		values.push_back(storedValue);
 	} else {
-		MemoryAccessData::StoredValues & values = data.unknownStores[pointer];
-		values.push_back(value);
+		StoredValues & values = data.unknownStores[pointer];
+		values.push_back(storedValue);
 	}
 }
 
@@ -41,14 +68,13 @@ void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
 	}
 }
 
-
 void MemoryAccessInstVisitor::insertNoDups(
-		MemoryAccessData::StoredValues &fromValues,
-		MemoryAccessData::StoredValues & toValues) const {
-	MemoryAccessData::StoredValues::iterator pos = toValues.begin();
-	MemoryAccessData::StoredValues inserted;
-	for (MemoryAccessData::StoredValues::iterator it = fromValues.begin(),
-							ie = fromValues.end();
+		StoredValues &fromValues,
+		StoredValues & toValues) const {
+	StoredValues::iterator pos = toValues.begin();
+	StoredValues inserted;
+	for (StoredValues::iterator it = fromValues.begin(),
+					ie = fromValues.end();
 			it != ie; it++) {
 		pos = std::lower_bound(pos, toValues.end(), *it);
 		if (pos == toValues.end()) {
@@ -65,19 +91,19 @@ void MemoryAccessInstVisitor::insertNoDups(
 }
 
 bool MemoryAccessInstVisitor::join(
-		MemoryAccessData::StoreBaseToValuesMap & from,
-		MemoryAccessData::StoreBaseToValuesMap & to) const {
+		const StoreBaseToValuesMap & from,
+		StoreBaseToValuesMap & to) const {
 	bool result = false;
-	for (MemoryAccessData::StoreBaseToValuesMap::iterator it = from.begin(),
-								ie = from.end();
+	for (StoreBaseToValuesMap::const_iterator it = from.begin(),
+							ie = from.end();
 			it != ie; it++) {
-		MemoryAccessData::StoreBaseToValuesMap::iterator found =
-				to.find(it->first);
+		StoreBaseToValuesMap::iterator found = to.find(it->first);
 		if (found == to.end()) {
 			to[it->first] = it->second;
 		} else {
-			MemoryAccessData::StoredValues & fromValues = it->second;
-			MemoryAccessData::StoredValues & toValues = found->second;
+			// Copy fromValues
+			StoredValues fromValues = it->second;
+			StoredValues & toValues = found->second;
 			std::sort(fromValues.begin(), fromValues.end());
 			std::sort(toValues.begin(), toValues.end());
 			result = result || !(std::includes(toValues.begin(), toValues.end(),
@@ -88,7 +114,7 @@ bool MemoryAccessInstVisitor::join(
 	return result;
 }
 
-bool MemoryAccessInstVisitor::join(MemoryAccessData & from, MemoryAccessData & to) const {
+bool MemoryAccessInstVisitor::join(const MemoryAccessData & from, MemoryAccessData & to) const {
 	bool result = join(from.stackStores, to.stackStores) |
 			join(from.globalStores, to.globalStores) |
 			join(from.unknownStores, to.unknownStores);
@@ -97,12 +123,24 @@ bool MemoryAccessInstVisitor::join(MemoryAccessData & from, MemoryAccessData & t
 
 bool MemoryAccessInstVisitor::join(const llvm::BasicBlock * from, const llvm::BasicBlock * to) {
 	bool result = false;
-	MemoryAccessData & fromData = data[from];
+	MemoryAccessData & fromData = getData(from);
 	if (data.find(to) == data.end()) {
 		result = true;
 	}
-	MemoryAccessData & toData = data[to];
+	MemoryAccessData & toData = getData(to);
 	return join(fromData, toData) || result;
+}
+
+MemoryAccessData & MemoryAccessInstVisitor::getData(const llvm::BasicBlock * bb) {
+	// Optimisation: Use lower_bound as hint
+	std::map<const llvm::BasicBlock*, MemoryAccessData*>::iterator it =
+			data.find(bb);
+	if (it != data.end()) {
+		return *(it->second);
+	}
+	MemoryAccessData * presult = new MemoryAccessData();
+	data[bb] = presult;
+	return *presult;
 }
 
 }

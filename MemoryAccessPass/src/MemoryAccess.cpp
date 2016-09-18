@@ -17,6 +17,7 @@
 
 #include <ChaoticIteration.h>
 #include <MemoryAccess.h>
+#include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
 
@@ -33,18 +34,31 @@ bool MemoryAccess::runOnFunction(llvm::Function &F) {
 	return false;
 }
 		
-void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData::StoreBaseToValuesMap & stores) const {
-	for (MemoryAccessData::StoreBaseToValuesMap::const_iterator it = stores.begin(),
-									ie = stores.end();
+void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
+	for (StoreBaseToValuesMap::const_iterator it = stores.begin(),
+							ie = stores.end();
 			it != ie; it++) {
 		const llvm::Value * pointer = it->first;
 		O << "\t>" << *pointer << "\n";
-		const MemoryAccessData::StoredValues & values = it->second;
-		for (MemoryAccessData::StoredValues::const_iterator vit = values.begin(),
-									vie = values.end();
+		const StoredValues & values = it->second;
+		for (StoredValues::const_iterator vit = values.begin(),
+							vie = values.end();
 				vit != vie; vit++) {
-			O << "\t\t>" << **vit << "\n";
+			StoredValue * storedValue = *vit;
+			O << "\t\t>" << *(storedValue->value) << "\n";
 		}
+	}
+}
+
+		
+void MemoryAccess::print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue*> & temporaries) const {
+	for (std::map<const llvm::Value *, StoredValue*>::const_iterator it = temporaries.begin(),
+									ie = temporaries.end();
+			it != ie; it++) {
+		const llvm::Value * pointer = it->first;
+		O << "\t>" << *pointer << "\n";
+		const StoredValue * value = it->second;
+		O << "\t\t>" << *(value->value) << "\n";
 	}
 }
 
@@ -55,6 +69,8 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.globalStores);
 	O << "Stores to THE UNKNOWN:\n";
 	print(O, data.unknownStores);
+	O << "Temporaries:\n";
+	print(O, data.temporaries);
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
@@ -62,7 +78,7 @@ void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
 	for (llvm::Function::iterator it = visitor->function->begin(),
 				ie = visitor->function->end();
 			it != ie; it++) {
-		MemoryAccessData &bb_data = visitor->data[it];
+		const MemoryAccessData &bb_data = visitor->getData(it);
 		visitor->join(bb_data, data);
 	}
 	print(O, data);

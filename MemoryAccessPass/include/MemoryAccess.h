@@ -18,7 +18,8 @@ namespace MemoryAccessPass {
 		virtual bool runOnFunction(llvm::Function &F);
 		virtual void print(llvm::raw_ostream &O, const llvm::Module *M) const;
 		void print(llvm::raw_ostream &O, const MemoryAccessData & data) const;
-		void print(llvm::raw_ostream &O, const MemoryAccessData::StoreBaseToValuesMap & stores) const;
+		void print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const;
+		void print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue*> & temporaries) const;
 	};
 }
 #endif // MEMORY_ACCESS_H
