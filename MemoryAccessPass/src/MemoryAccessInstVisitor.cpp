@@ -91,7 +91,6 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 	MemoryAccessData & data = getData(basicBlock);
 	StoredValue storedPointer = data.m_evaluator.visit(pointer);
 	StoredValue storedValue = data.m_evaluator.visit(value);
-	llvm::errs() << "Store instruction: " << si << " Pointer: " << storedPointer << " Value: " << storedValue << "\n";
 	const StoredValueType pointerType = storedPointer.type;
 	// We want to keep working with the evaluated pointer.
 	const llvm::Value * epointer = storedPointer.value;
