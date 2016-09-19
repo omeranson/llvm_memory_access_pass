@@ -14,10 +14,12 @@
 namespace MemoryAccessPass {
 
 	typedef enum {
-		StoredValueTypeStack = 0,
+		StoredValueTypeUnknown = 0,
+		StoredValueTypePrimitive,
+		StoredValueTypeConstant,
+		StoredValueTypeStack,
 		StoredValueTypeGlobal,
-		StoredValueTypeHeap,
-		StoredValueTypeUnknown
+		StoredValueTypeHeap
 	} StoredValueType;
 
 	struct StoredValue {
@@ -41,27 +43,92 @@ namespace MemoryAccessPass {
 		bool operator<(const StoredValue & other) {
 			return (value < other.value);
 		}
+		bool isTop() const {
+			return ((value == 0) && (type == StoredValueTypeUnknown));
+		}
 	};
+	inline llvm::raw_ostream & operator<<(llvm::raw_ostream & O, const StoredValue & storedValue) {
+		if (storedValue.isTop()) {
+			O << "Top";
+		} else {
+			O << *(storedValue.value);
+			switch (storedValue.type) {
+			case StoredValueTypeUnknown:
+				O << " (Unknown)";
+				break;
+			case StoredValueTypePrimitive:
+				O << " (Primitive)";
+				break;
+			case StoredValueTypeConstant:
+				O << " (Constant)";
+				break;
+			case StoredValueTypeStack:
+				O << " (Stack)";
+				break;
+			case StoredValueTypeGlobal:
+				O << " (Global)";
+				break;
+			case StoredValueTypeHeap:
+				O << " (Heap)";
+				break;
+			}
+		}
+		return O;
+	}
 
-	typedef std::vector<StoredValue*> StoredValues;
+	typedef std::vector<StoredValue> StoredValues;
 	typedef std::map<const llvm::Value*, StoredValues> StoreBaseToValuesMap;
+	typedef std::map<const llvm::Value*, StoredValue> StoreBaseToValueMap;
 
-	class Evaluator : public llvm::ValueVisitor<Evaluator, StoredValue*> {
+	class Evaluator : public llvm::ValueVisitor<Evaluator, StoredValue> {
+	private:
+		StoreBaseToValueMap & m_stores;
+		std::vector<llvm::Instruction *> m_instsToDestroy;
 	public:
-		Evaluator() : ValueVisitor<Evaluator, StoredValue*>() {}
-		Evaluator(std::map<const llvm::Value *, StoredValue*> & cache) :
-				ValueVisitor<Evaluator, StoredValue*>(cache) {}
-		~Evaluator() {}
+		Evaluator(StoreBaseToValueMap & stores) : ValueVisitor<Evaluator, StoredValue>(), m_stores(stores) {}
+		Evaluator(StoreBaseToValueMap & cache, StoreBaseToValueMap & stores) :
+				ValueVisitor<Evaluator, StoredValue>(cache), m_stores(stores) {}
+		~Evaluator() {
+			for (std::vector<llvm::Instruction *>::iterator it = m_instsToDestroy.begin(),
+									ie = m_instsToDestroy.end();
+					it != ie; it++) {
+				llvm::Instruction * inst = *it;
+				delete inst;
+				*it = 0;
+			}
+		}
 
-		StoredValue* visitInstruction(llvm::Instruction & value) { return new StoredValue(); }
-		StoredValue* visitArgument(llvm::Argument & argument) { return new StoredValue(); }
-		StoredValue* visitValue(llvm::Value & value) { return new StoredValue(); }
-		StoredValue* visitConstantInt(llvm::ConstantInt & ci) { return new StoredValue(); }
-		StoredValue* visitConstantFP(llvm::ConstantFP & cfp) { return new StoredValue(); }
-		StoredValue* visitConstant(llvm::Constant & constant) { return new StoredValue(); }
+		StoredValue visitInstruction(llvm::Instruction & instruction) {
+			llvm::errs() << __PRETTY_FUNCTION__ << ": " << instruction << ": Return top\n";
+			StoredValue result(&instruction, StoredValueTypeUnknown);
+			return result;
+		}
+		StoredValue visitArgument(llvm::Argument & argument);
 
-		StoredValue* visitGlobalValue(llvm::GlobalValue & globalValue);
-		StoredValue* visitAllocaInst(llvm::AllocaInst & allocaInst);
+		StoredValue visitValue(llvm::Value & value) {
+			llvm::errs() << __PRETTY_FUNCTION__ << ": " << value << ": Return top\n";
+			StoredValue result(&value, StoredValueTypeUnknown);
+			return result;
+		}
+		StoredValue visitConstantInt(llvm::ConstantInt & ci) {
+			StoredValue result(&ci, StoredValueTypeConstant);
+			return result;
+		}
+		StoredValue visitConstantFP(llvm::ConstantFP & cfp) {
+			StoredValue result(&cfp, StoredValueTypeConstant);
+			return result;
+		}
+		StoredValue visitConstant(llvm::Constant & constant) {
+			llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+			StoredValue result(&constant, StoredValueTypeUnknown);
+			return result;
+		}
+		StoredValue visitConstantExpr(llvm::ConstantExpr & constantExpr);
+
+		StoredValue visitGlobalValue(llvm::GlobalValue & globalValue);
+		StoredValue visitAllocaInst(llvm::AllocaInst & allocaInst);
+		StoredValue visitLoadInst(llvm::LoadInst & loadInst);
+		StoredValue visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst);
 	};
 
 	class MemoryAccessData {
@@ -70,7 +137,8 @@ namespace MemoryAccessPass {
 		StoreBaseToValuesMap stackStores;
 		StoreBaseToValuesMap globalStores;
 		StoreBaseToValuesMap unknownStores;
-		std::map<const llvm::Value *, StoredValue*> temporaries;
+		std::map<const llvm::Value *, StoredValue> temporaries;
+		std::map<const llvm::Value *, StoredValue> stores;
 		//MemoryAccessData(MemoryAccessData& ); // TODO Copy constructor
 
 		MemoryAccessData();
@@ -94,6 +162,9 @@ namespace MemoryAccessPass {
 		bool join(const MemoryAccessData & from, MemoryAccessData & to) const;
 		bool join(const StoreBaseToValuesMap & from,
 				StoreBaseToValuesMap & to) const;
+		bool join(const std::map<const llvm::Value *, StoredValue> & from,
+				std::map<const llvm::Value *, StoredValue> & to)const;
+		void joinStoredValues(MemoryAccessData & data, llvm::Value * pointer, StoredValues & values);
 		void insertNoDups(
 			StoredValues &fromValues,
 			StoredValues & toValues) const;

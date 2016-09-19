@@ -44,21 +44,21 @@ void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stor
 		for (StoredValues::const_iterator vit = values.begin(),
 							vie = values.end();
 				vit != vie; vit++) {
-			StoredValue * storedValue = *vit;
-			O << "\t\t>" << *(storedValue->value) << "\n";
+			const StoredValue & storedValue = *vit;
+			O << "\t\t>" << storedValue << "\n";
 		}
 	}
 }
 
 		
-void MemoryAccess::print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue*> & temporaries) const {
-	for (std::map<const llvm::Value *, StoredValue*>::const_iterator it = temporaries.begin(),
+void MemoryAccess::print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue> & temporaries) const {
+	for (std::map<const llvm::Value *, StoredValue>::const_iterator it = temporaries.begin(),
 									ie = temporaries.end();
 			it != ie; it++) {
 		const llvm::Value * pointer = it->first;
 		O << "\t>" << *pointer << "\n";
-		const StoredValue * value = it->second;
-		O << "\t\t>" << *(value->value) << "\n";
+		const StoredValue & value = it->second;
+		O << "\t\t>" << value << "\n";
 	}
 }
 
@@ -71,6 +71,8 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.unknownStores);
 	O << "Temporaries:\n";
 	print(O, data.temporaries);
+	O << "Stores:\n";
+	print(O, data.stores);
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {

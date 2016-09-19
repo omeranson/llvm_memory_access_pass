@@ -5,21 +5,58 @@
 
 namespace MemoryAccessPass {
 
-StoredValue* Evaluator::visitGlobalValue(llvm::GlobalValue & globalValue) {
-	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
+StoredValue Evaluator::visitGlobalValue(llvm::GlobalValue & globalValue) {
 	const llvm::Value * value = &globalValue;
-	StoredValue* result = new StoredValue(value, StoredValueTypeGlobal);
+	StoredValue result(value, StoredValueTypeGlobal);
 	m_cache.insert(std::make_pair(value, result));
 	return result;
 }
 
-StoredValue* Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
-	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
+StoredValue Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
 	const llvm::Value * value = &allocaInst;
-	StoredValue* result = new StoredValue(value, StoredValueTypeStack);
+	StoredValue result(value, StoredValueTypeStack);
 	m_cache.insert(std::make_pair(value, result));
 	return result;
 }
+
+StoredValue Evaluator::visitLoadInst(llvm::LoadInst & loadInst) {
+	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
+	llvm::Value * pointer = loadInst.getPointerOperand();
+	StoredValue result = m_stores[pointer];
+	return result;
+}
+
+StoredValue Evaluator::visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst) {
+	llvm::Value * pointer = gepInst.getPointerOperand();
+	StoredValue pointerStoredValue = visit(pointer);
+	StoredValueType pointerStoredValueType = pointerStoredValue.type;
+	for (llvm::User::op_iterator it = gepInst.idx_begin(),
+					ie = gepInst.idx_end();
+			it != ie; it++) {
+		llvm::Value * operand = *it;
+		StoredValue operandStoredValue = visit(operand);
+		if (operandStoredValue.type != StoredValueTypeConstant) {
+			pointerStoredValueType = StoredValueTypeUnknown;
+		}
+	}
+	StoredValue result(pointer, pointerStoredValueType);
+	return result;
+}
+
+StoredValue Evaluator::visitArgument(llvm::Argument & argument) {
+	StoredValueType type = argument.getType()->isPointerTy() ?
+			StoredValueTypeUnknown : StoredValueTypePrimitive;
+	StoredValue result(&argument, type);
+	m_cache.insert(std::make_pair(&argument, result));
+	return result;
+}
+
+StoredValue Evaluator::visitConstantExpr(llvm::ConstantExpr & constantExpr) {
+	llvm::Instruction * instruction = constantExpr.getAsInstruction();
+	m_instsToDestroy.push_back(instruction);
+	return visit(instruction);
+}
+
 
 MemoryAccessData::MemoryAccessData() : m_evaluator(temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}
@@ -27,7 +64,15 @@ MemoryAccessData::~MemoryAccessData() {}
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
 		llvm::InstVisitor<MemoryAccessInstVisitor>(), indirectFunctionCallCount(0) {}
 
-MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {}
+MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
+	for (std::map<const llvm::BasicBlock*, MemoryAccessData*>::iterator it = data.begin(),
+										ie = data.end();
+			it != ie; it++) {
+		MemoryAccessData * data = it->second;
+		delete data;
+		it->second = 0;
+	}
+}
 
 void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
 	this->function = &function;
@@ -35,25 +80,34 @@ void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
 
 void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 	llvm::errs() << "Store instruction: " << si << "\n";
-	const llvm::Value * pointer = si.getPointerOperand();
+	llvm::Value * pointer = si.getPointerOperand();
 	llvm::Value * value = si.getValueOperand();
 	const llvm::BasicBlock * basicBlock = si.getParent();
 	MemoryAccessData & data = getData(basicBlock);
-	StoredValue* storedValue = data.m_evaluator.visit(value);
-	if (!storedValue) {
-		llvm::errs() << "storedValue is null for: " << *value << "\n";
-		return;
-	}
-	const StoredValueType valueType = storedValue->type;
-	if (valueType == StoredValueTypeStack) {
+	StoredValue storedPointer = data.m_evaluator.visit(pointer);
+	StoredValue storedValue = data.m_evaluator.visit(value);
+	const StoredValueType pointerType = storedPointer.type;
+	if (pointerType == StoredValueTypeStack) {
 		StoredValues & values = data.stackStores[pointer];
 		values.push_back(storedValue);
-	} else if (valueType == StoredValueTypeGlobal) {
+		joinStoredValues(data, pointer, values);
+	} else if (pointerType == StoredValueTypeGlobal) {
 		StoredValues & values = data.globalStores[pointer];
 		values.push_back(storedValue);
+		joinStoredValues(data, pointer, values);
 	} else {
+		llvm::errs() << "This UNKNOWN is: " << storedPointer.value << "\n";
 		StoredValues & values = data.unknownStores[pointer];
 		values.push_back(storedValue);
+		joinStoredValues(data, pointer, values);
+	}
+}
+
+void MemoryAccessInstVisitor::joinStoredValues(MemoryAccessData & data, llvm::Value * pointer, StoredValues & values) {
+	if (values.size() == 1) {
+		data.stores[pointer] = StoredValue(*values.begin());
+	} else {
+		data.stores[pointer] = StoredValue();
 	}
 }
 
@@ -114,10 +168,31 @@ bool MemoryAccessInstVisitor::join(
 	return result;
 }
 
+bool MemoryAccessInstVisitor::join(const std::map<const llvm::Value *, StoredValue> & from,
+		std::map<const llvm::Value *, StoredValue> & to) const {
+	bool result = false;
+	for (std::map<const llvm::Value *, StoredValue>::const_iterator it = from.begin(),
+									ie = from.end();
+			it != ie; it++) {
+		std::map<const llvm::Value *, StoredValue>::iterator found = to.find(it->first);
+		if (found == to.end()) {
+			to[it->first] = it->second;
+		} else if (found->second == it->second) {
+			// Do nothing
+		} else {
+			// Replace with top
+			found->second = StoredValue();
+		}
+	}
+	return result;
+}
+
 bool MemoryAccessInstVisitor::join(const MemoryAccessData & from, MemoryAccessData & to) const {
 	bool result = join(from.stackStores, to.stackStores) |
 			join(from.globalStores, to.globalStores) |
-			join(from.unknownStores, to.unknownStores);
+			join(from.unknownStores, to.unknownStores) |
+			join(from.temporaries, to.temporaries) |
+			join(from.stores, to.stores);
 	return result;
 }
 

@@ -53,7 +53,6 @@ namespace MemoryAccessPass {
 			for (int idx = 0; idx < successorCount; idx++) {
 				llvm::BasicBlock * BB = terminator->getSuccessor(idx);
 				if (visitor.join(&element, BB)) {
-					llvm::errs() << "Adding to worklist: " << BB->getName() << ": " << element.getName() << " -> " << BB->getName() << "\n";
 					worklist.push_back(BB);
 				}
 			}
@@ -71,7 +70,6 @@ namespace MemoryAccessPass {
 		void iterate(llvm::BasicBlock & BB) {
 			BasicBlockInFunctionComparator comparator(*BB.getParent());
 			std::list<llvm::BasicBlock *> worklist;
-			llvm::errs() << "Adding to worklist: " << BB.getName() << "\n";
 			worklist.push_back(&BB);
 			T & visitor = getVisitor();
 			while (!worklist.empty()) {
@@ -79,7 +77,6 @@ namespace MemoryAccessPass {
 						first_element = worklist.begin();
 				worklist.pop_front();
 				llvm::BasicBlock * element = *first_element;
-				llvm::errs() << "Working on: " << element->getName() << "\n";
 				visitor.visit(element);
 				populateWorklistWithSuccessors(worklist, *element);
 				worklist.sort(comparator);

@@ -4,6 +4,7 @@
 #include <map>
 
 #include <llvm/InstVisitor.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -23,20 +24,18 @@ namespace llvm {
 		void visitConstantFP(ConstantFP & cfp) {}
 		void visitGlobalValue(GlobalValue & globalValue) {}
 		void visitConstant(Constant & constant) {}
+		void visitConstantExpr(ConstantExpr & constantExpr) {}
 
 		RetType visit(Value * value) { return visit(*value); }
 		RetType visit(Value & value) {
 			typename std::map<const Value *, RetType>::iterator it =
 					m_cache.find(&value);
 			if (it != m_cache.end()) {
-				llvm::errs() << __PRETTY_FUNCTION__ << "Cache hit: " << value << "\n";
 				return it->second;
 			}
-			llvm::errs() << __PRETTY_FUNCTION__ << "Cache miss: " << value << "\n";
 			if (isa<Instruction>(&value)) {
 				Instruction & instruction =
 						cast<Instruction>(value);
-				//return static_cast<T*>(this)->visit(instruction);
 				return static_cast<InstVisitor<T, RetType>*>(this)->visit(instruction);
 			}
 			if (isa<Constant>(&value)) {
@@ -64,7 +63,20 @@ namespace llvm {
 				GlobalValue &globalValue = cast<GlobalValue>(constant);
 				return static_cast<T*>(this)->visitGlobalValue(globalValue);
 			}
+			if (isa<GlobalValue>(&constant)) {
+				GlobalValue &globalValue = cast<GlobalValue>(constant);
+				return static_cast<T*>(this)->visitGlobalValue(globalValue);
+			}
+			if (isa<ConstantExpr>(&constant)) {
+				ConstantExpr &constantExpr = cast<ConstantExpr>(constant);
+				return visit(constantExpr);
+			}
 			return static_cast<T*>(this)->visitConstant(constant);
+		}
+
+		RetType visit(ConstantExpr * constantExpr) { return visit(*constantExpr); }
+		RetType visit(ConstantExpr & constantExpr) {
+			return static_cast<T*>(this)->visitConstantExpr(constantExpr);
 		}
 	};
 }
