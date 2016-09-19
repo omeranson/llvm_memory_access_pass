@@ -19,7 +19,8 @@ namespace MemoryAccessPass {
 		StoredValueTypeConstant,
 		StoredValueTypeStack,
 		StoredValueTypeGlobal,
-		StoredValueTypeHeap
+		StoredValueTypeHeap,
+		StoredValueTypeArgument
 	} StoredValueType;
 
 	struct StoredValue {
@@ -36,11 +37,14 @@ namespace MemoryAccessPass {
 		bool operator==(const StoredValue & other) const {
 			return ((value == other.value) && (type == other.type));
 		}
+		bool operator!=(const StoredValue & other) const {
+			return !(*this == other);
+		}
 		void operator=(const StoredValue & other) {
 			value = other.value;
 			type = other.type;
 		}
-		bool operator<(const StoredValue & other) {
+		bool operator<(const StoredValue & other) const {
 			return (value < other.value);
 		}
 		bool isTop() const {
@@ -71,6 +75,9 @@ namespace MemoryAccessPass {
 			case StoredValueTypeHeap:
 				O << " (Heap)";
 				break;
+			case StoredValueTypeArgument:
+				O << " (Argument)";
+				break;
 			}
 		}
 		return O;
@@ -86,7 +93,7 @@ namespace MemoryAccessPass {
 		std::vector<llvm::Instruction *> m_instsToDestroy;
 	public:
 		Evaluator(StoreBaseToValueMap & stores) : ValueVisitor<Evaluator, StoredValue>(), m_stores(stores) {}
-		Evaluator(StoreBaseToValueMap & cache, StoreBaseToValueMap & stores) :
+		Evaluator(StoreBaseToValueMap & stores, StoreBaseToValueMap & cache) :
 				ValueVisitor<Evaluator, StoredValue>(cache), m_stores(stores) {}
 		~Evaluator() {
 			for (std::vector<llvm::Instruction *>::iterator it = m_instsToDestroy.begin(),
@@ -136,6 +143,7 @@ namespace MemoryAccessPass {
 		Evaluator m_evaluator;
 		StoreBaseToValuesMap stackStores;
 		StoreBaseToValuesMap globalStores;
+		StoreBaseToValuesMap argumentStores;
 		StoreBaseToValuesMap unknownStores;
 		std::map<const llvm::Value *, StoredValue> temporaries;
 		std::map<const llvm::Value *, StoredValue> stores;
@@ -164,7 +172,7 @@ namespace MemoryAccessPass {
 				StoreBaseToValuesMap & to) const;
 		bool join(const std::map<const llvm::Value *, StoredValue> & from,
 				std::map<const llvm::Value *, StoredValue> & to)const;
-		void joinStoredValues(MemoryAccessData & data, llvm::Value * pointer, StoredValues & values);
+		void joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values);
 		void insertNoDups(
 			StoredValues &fromValues,
 			StoredValues & toValues) const;

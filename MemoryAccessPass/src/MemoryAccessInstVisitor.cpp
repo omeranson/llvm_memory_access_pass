@@ -1,7 +1,8 @@
 #include <algorithm>
 
-#include <MemoryAccessInstVisitor.h>
 #include <llvm/Support/raw_ostream.h>
+
+#include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
 
@@ -20,32 +21,37 @@ StoredValue Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
 }
 
 StoredValue Evaluator::visitLoadInst(llvm::LoadInst & loadInst) {
-	llvm::errs() << "Enter " << __PRETTY_FUNCTION__ << "\n";
 	llvm::Value * pointer = loadInst.getPointerOperand();
 	StoredValue result = m_stores[pointer];
 	return result;
 }
 
 StoredValue Evaluator::visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst) {
+	bool isConstParams = true;
 	llvm::Value * pointer = gepInst.getPointerOperand();
 	StoredValue pointerStoredValue = visit(pointer);
-	StoredValueType pointerStoredValueType = pointerStoredValue.type;
 	for (llvm::User::op_iterator it = gepInst.idx_begin(),
 					ie = gepInst.idx_end();
 			it != ie; it++) {
 		llvm::Value * operand = *it;
 		StoredValue operandStoredValue = visit(operand);
 		if (operandStoredValue.type != StoredValueTypeConstant) {
-			pointerStoredValueType = StoredValueTypeUnknown;
+			isConstParams = false;
+			break;
 		}
 	}
-	StoredValue result(pointer, pointerStoredValueType);
+	StoredValueType pointerStoredValueType = isConstParams ?
+			pointerStoredValue.type : StoredValueTypeUnknown;
+	StoredValue result(&gepInst, pointerStoredValueType);
+	if (isConstParams) {
+		m_cache.insert(std::make_pair(&gepInst, result));
+	}
 	return result;
 }
 
 StoredValue Evaluator::visitArgument(llvm::Argument & argument) {
 	StoredValueType type = argument.getType()->isPointerTy() ?
-			StoredValueTypeUnknown : StoredValueTypePrimitive;
+			StoredValueTypeArgument : StoredValueTypePrimitive;
 	StoredValue result(&argument, type);
 	m_cache.insert(std::make_pair(&argument, result));
 	return result;
@@ -58,7 +64,7 @@ StoredValue Evaluator::visitConstantExpr(llvm::ConstantExpr & constantExpr) {
 }
 
 
-MemoryAccessData::MemoryAccessData() : m_evaluator(temporaries) {}
+MemoryAccessData::MemoryAccessData() : m_evaluator(stores, temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}
 
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
@@ -79,33 +85,39 @@ void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
 }
 
 void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
-	llvm::errs() << "Store instruction: " << si << "\n";
 	llvm::Value * pointer = si.getPointerOperand();
 	llvm::Value * value = si.getValueOperand();
 	const llvm::BasicBlock * basicBlock = si.getParent();
 	MemoryAccessData & data = getData(basicBlock);
 	StoredValue storedPointer = data.m_evaluator.visit(pointer);
 	StoredValue storedValue = data.m_evaluator.visit(value);
+	llvm::errs() << "Store instruction: " << si << " Pointer: " << storedPointer << " Value: " << storedValue << "\n";
 	const StoredValueType pointerType = storedPointer.type;
+	// We want to keep working with the evaluated pointer.
+	const llvm::Value * epointer = storedPointer.value;
 	if (pointerType == StoredValueTypeStack) {
-		StoredValues & values = data.stackStores[pointer];
+		StoredValues & values = data.stackStores[epointer];
 		values.push_back(storedValue);
-		joinStoredValues(data, pointer, values);
+		joinStoredValues(data, epointer, values);
 	} else if (pointerType == StoredValueTypeGlobal) {
-		StoredValues & values = data.globalStores[pointer];
+		StoredValues & values = data.globalStores[epointer];
 		values.push_back(storedValue);
-		joinStoredValues(data, pointer, values);
+		joinStoredValues(data, epointer, values);
+	} else if (pointerType == StoredValueTypeArgument) {
+		StoredValues & values = data.argumentStores[epointer];
+		values.push_back(storedValue);
+		joinStoredValues(data, epointer, values);
 	} else {
-		llvm::errs() << "This UNKNOWN is: " << storedPointer.value << "\n";
-		StoredValues & values = data.unknownStores[pointer];
+		llvm::errs() << "This UNKNOWN is: " << storedPointer << "\n";
+		StoredValues & values = data.unknownStores[epointer];
 		values.push_back(storedValue);
-		joinStoredValues(data, pointer, values);
+		joinStoredValues(data, epointer, values);
 	}
 }
 
-void MemoryAccessInstVisitor::joinStoredValues(MemoryAccessData & data, llvm::Value * pointer, StoredValues & values) {
+void MemoryAccessInstVisitor::joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values) {
 	if (values.size() == 1) {
-		data.stores[pointer] = StoredValue(*values.begin());
+		data.stores[pointer] = *values.begin();
 	} else {
 		data.stores[pointer] = StoredValue();
 	}
@@ -177,11 +189,11 @@ bool MemoryAccessInstVisitor::join(const std::map<const llvm::Value *, StoredVal
 		std::map<const llvm::Value *, StoredValue>::iterator found = to.find(it->first);
 		if (found == to.end()) {
 			to[it->first] = it->second;
-		} else if (found->second == it->second) {
-			// Do nothing
-		} else {
+			result = true;
+		} else if (found->second != it->second) {
 			// Replace with top
 			found->second = StoredValue();
+			result = true;
 		}
 	}
 	return result;
@@ -190,6 +202,7 @@ bool MemoryAccessInstVisitor::join(const std::map<const llvm::Value *, StoredVal
 bool MemoryAccessInstVisitor::join(const MemoryAccessData & from, MemoryAccessData & to) const {
 	bool result = join(from.stackStores, to.stackStores) |
 			join(from.globalStores, to.globalStores) |
+			join(from.argumentStores, to.argumentStores) |
 			join(from.unknownStores, to.unknownStores) |
 			join(from.temporaries, to.temporaries) |
 			join(from.stores, to.stores);

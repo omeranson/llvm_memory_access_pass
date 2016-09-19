@@ -50,7 +50,6 @@ void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stor
 	}
 }
 
-		
 void MemoryAccess::print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue> & temporaries) const {
 	for (std::map<const llvm::Value *, StoredValue>::const_iterator it = temporaries.begin(),
 									ie = temporaries.end();
@@ -67,6 +66,8 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.stackStores);
 	O << "Stores to globals:\n";
 	print(O, data.globalStores);
+	O << "Stores to argument pointers:\n";
+	print(O, data.argumentStores);
 	O << "Stores to THE UNKNOWN:\n";
 	print(O, data.unknownStores);
 	O << "Temporaries:\n";
