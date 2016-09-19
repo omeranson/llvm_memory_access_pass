@@ -50,6 +50,7 @@ namespace MemoryAccessPass {
 		bool isTop() const {
 			return ((value == 0) && (type == StoredValueTypeUnknown));
 		}
+		static StoredValue top;
 	};
 	inline llvm::raw_ostream & operator<<(llvm::raw_ostream & O, const StoredValue & storedValue) {
 		if (storedValue.isTop()) {
@@ -138,6 +139,7 @@ namespace MemoryAccessPass {
 		StoredValue visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst);
 		StoredValue visitCastInst(llvm::CastInst & ci);
 		StoredValue visitBinaryOperator(llvm::BinaryOperator & bo);
+		StoredValue visitCallInst(llvm::CallInst & ci);
 	};
 
 	class MemoryAccessData {

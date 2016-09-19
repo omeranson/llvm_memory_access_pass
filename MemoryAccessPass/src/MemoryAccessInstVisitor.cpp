@@ -6,6 +6,8 @@
 
 namespace MemoryAccessPass {
 
+StoredValue StoredValue::top = StoredValue();
+
 StoredValue Evaluator::visitGlobalValue(llvm::GlobalValue & globalValue) {
 	const llvm::Value * value = &globalValue;
 	StoredValue result(value, StoredValueTypeGlobal);
@@ -119,6 +121,23 @@ StoredValue Evaluator::visitBinaryOperator(llvm::BinaryOperator & bo) {
 	if (isOp0Const && isOp1Const) {
 		m_cache.insert(std::make_pair(&bo, result));
 	}
+	return result;
+}
+
+StoredValue Evaluator::visitCallInst(llvm::CallInst & ci) {
+	llvm::Function * function = ci.getCalledFunction();
+	if (!function) {
+		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+		return StoredValue::top;
+	}
+	const char * functionName = function->getName().data();
+	const char * malloc = strstr(functionName, "malloc");
+	const char * realloc = strstr(functionName, "realloc");
+	if (!(malloc || realloc)) {
+		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+		return StoredValue::top;
+	}
+	StoredValue result(&ci, StoredValueTypeHeap);
 	return result;
 }
 
