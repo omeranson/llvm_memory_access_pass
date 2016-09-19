@@ -63,6 +63,27 @@ StoredValue Evaluator::visitConstantExpr(llvm::ConstantExpr & constantExpr) {
 	return visit(instruction);
 }
 
+StoredValue Evaluator::visitCastInst(llvm::CastInst & ci) {
+	llvm::Value * operand = ci.getOperand(0);
+	bool isConstParams = llvm::isa<llvm::Constant>(operand);
+	StoredValueType type;
+	if (ci.getType()->isPointerTy()) {
+		if (operand->getType()->isPointerTy()) {
+			StoredValue operandSV = visit(operand);
+			type = operandSV.type;
+		} else {
+			type = StoredValueTypeUnknown;
+		}
+	} else {
+		type = isConstParams ?
+				StoredValueTypeConstant : StoredValueTypePrimitive;
+	}
+	StoredValue result(&ci, type);
+	if (isConstParams) {
+		m_cache.insert(std::make_pair(&ci, result));
+	}
+	return result;
+}
 
 MemoryAccessData::MemoryAccessData() : m_evaluator(stores, temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}

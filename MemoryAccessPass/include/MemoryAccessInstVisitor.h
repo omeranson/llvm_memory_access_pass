@@ -136,6 +136,7 @@ namespace MemoryAccessPass {
 		StoredValue visitAllocaInst(llvm::AllocaInst & allocaInst);
 		StoredValue visitLoadInst(llvm::LoadInst & loadInst);
 		StoredValue visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst);
+		StoredValue visitCastInst(llvm::CastInst & ci);
 	};
 
 	class MemoryAccessData {
