@@ -85,6 +85,43 @@ StoredValue Evaluator::visitCastInst(llvm::CastInst & ci) {
 	return result;
 }
 
+StoredValue Evaluator::visitBinaryOperator(llvm::BinaryOperator & bo) {
+	// As in cast:
+	// 	If result is a pointer, then
+	// 		if operands are a pointer and a constant, type is that of the pointer
+	// 		else type is unknown
+	// 	else
+	// 		if both operands are constant, type is constant
+	// 		else type is primitive
+	// Cache only if both operands are constant
+	llvm::Value * operand0 = bo.getOperand(0);
+	llvm::Value * operand1 = bo.getOperand(1);
+	bool isOp0Const = llvm::isa<llvm::Constant>(operand0);
+	bool isOp1Const = llvm::isa<llvm::Constant>(operand1);
+	bool isOp0Pointer = operand0->getType()->isPointerTy();
+	bool isOp1Pointer = operand1->getType()->isPointerTy();
+	StoredValueType type;
+	if (bo.getType()->isPointerTy()) {
+		if (isOp0Pointer && isOp1Const) {
+			StoredValue op0SV = visit(operand0);
+			type = op0SV.type;
+		} else if (isOp1Pointer && isOp0Const) {
+			StoredValue op1SV = visit(operand1);
+			type = op1SV.type;
+		} else {
+			type = StoredValueTypeUnknown;
+		}
+	} else {
+		type = (isOp0Const && isOp1Const) ?
+				StoredValueTypeConstant : StoredValueTypePrimitive;
+	}
+	StoredValue result(&bo, type);
+	if (isOp0Const && isOp1Const) {
+		m_cache.insert(std::make_pair(&bo, result));
+	}
+	return result;
+}
+
 MemoryAccessData::MemoryAccessData() : m_evaluator(stores, temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}
 

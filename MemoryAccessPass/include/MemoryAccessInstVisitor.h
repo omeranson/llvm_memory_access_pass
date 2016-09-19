@@ -137,6 +137,7 @@ namespace MemoryAccessPass {
 		StoredValue visitLoadInst(llvm::LoadInst & loadInst);
 		StoredValue visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst);
 		StoredValue visitCastInst(llvm::CastInst & ci);
+		StoredValue visitBinaryOperator(llvm::BinaryOperator & bo);
 	};
 
 	class MemoryAccessData {
