@@ -24,7 +24,14 @@ StoredValue Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
 
 StoredValue Evaluator::visitLoadInst(llvm::LoadInst & loadInst) {
 	llvm::Value * pointer = loadInst.getPointerOperand();
-	StoredValue result = m_stores[pointer];
+	StoreBaseToValueMap::iterator it = m_stores.find(pointer);
+	if (it != m_stores.end()) {
+		StoredValue result = m_stores[pointer];
+		return result;
+	}
+	StoredValueType type = (loadInst.getType()->isPointerTy()) ?
+			StoredValueTypeUnknown : StoredValueTypePrimitive;
+	StoredValue result(&loadInst, type);
 	return result;
 }
 
