@@ -152,6 +152,8 @@ namespace MemoryAccessPass {
 		StoreBaseToValuesMap unknownStores;
 		std::map<const llvm::Value *, StoredValue> temporaries;
 		std::map<const llvm::Value *, StoredValue> stores;
+		std::set<const llvm::Function *> functionCalls;
+		std::set<const llvm::Function *> indirectFunctionCalls;
 		//MemoryAccessData(MemoryAccessData& ); // TODO Copy constructor
 
 		MemoryAccessData();
@@ -162,9 +164,7 @@ namespace MemoryAccessPass {
 	class MemoryAccessInstVisitor : public llvm::InstVisitor<MemoryAccessInstVisitor> {
 	public:
 		std::map<const llvm::BasicBlock*, MemoryAccessData*> data;
-		std::vector<const llvm::Function *> functionCalls;
 		llvm::Function * function;
-		int indirectFunctionCallCount;
 		MemoryAccessInstVisitor();
 		~MemoryAccessInstVisitor();
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
@@ -177,6 +177,9 @@ namespace MemoryAccessPass {
 				StoreBaseToValuesMap & to) const;
 		bool join(const std::map<const llvm::Value *, StoredValue> & from,
 				std::map<const llvm::Value *, StoredValue> & to)const;
+		template <class T>
+		bool join(const std::set<const T *> & from,
+				std::set<const T *> & to) const;
 		void joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values);
 		void insertNoDups(
 			StoredValues &fromValues,

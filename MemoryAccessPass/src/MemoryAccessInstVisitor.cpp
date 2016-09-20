@@ -162,7 +162,7 @@ MemoryAccessData::MemoryAccessData() : m_evaluator(stores, temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}
 
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
-		llvm::InstVisitor<MemoryAccessInstVisitor>(), indirectFunctionCallCount(0) {}
+		llvm::InstVisitor<MemoryAccessInstVisitor>() {}
 
 MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 	for (std::map<const llvm::BasicBlock*, MemoryAccessData*>::iterator it = data.begin(),
@@ -221,11 +221,16 @@ void MemoryAccessInstVisitor::joinStoredValues(MemoryAccessData & data, const ll
 }
 
 void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
+	if (llvm::isa<llvm::DbgInfoIntrinsic>(&ci)) {
+		return;
+	}
+	const llvm::BasicBlock * basicBlock = ci.getParent();
+	MemoryAccessData & data = getData(basicBlock);
 	const llvm::Function * callee = ci.getCalledFunction();
 	if (callee) {
-		functionCalls.push_back(callee);
+		data.functionCalls.insert(callee);
 	} else {
-		++indirectFunctionCallCount;
+		data.indirectFunctionCalls.insert(callee);
 		llvm::errs() << "Indirect function call: " <<
 				*(ci.getCalledValue()) << "\n";
 	}
@@ -296,13 +301,25 @@ bool MemoryAccessInstVisitor::join(const std::map<const llvm::Value *, StoredVal
 	return result;
 }
 
+template <class T>
+bool MemoryAccessInstVisitor::join(const std::set<const T *> & from,
+		std::set<const T *> & to) const {
+	bool result = !(std::includes(to.begin(), to.end(),
+			from.begin(), from.end()));
+	to.insert(from.begin(), from.end());
+	return result;
+}
+
 bool MemoryAccessInstVisitor::join(const MemoryAccessData & from, MemoryAccessData & to) const {
 	bool result = join(from.stackStores, to.stackStores) |
 			join(from.globalStores, to.globalStores) |
 			join(from.argumentStores, to.argumentStores) |
+			join(from.heapStores, to.heapStores) |
 			join(from.unknownStores, to.unknownStores) |
 			join(from.temporaries, to.temporaries) |
-			join(from.stores, to.stores);
+			join(from.stores, to.stores) |
+			join(from.functionCalls, to.functionCalls) |
+			join(from.indirectFunctionCalls, to.indirectFunctionCalls);
 	return result;
 }
 

@@ -76,6 +76,13 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.temporaries);
 	O << "Stores:\n";
 	print(O, data.stores);
+	O << "Function calls: Indirect: " << data.indirectFunctionCalls.size() << " Direct:\n";
+	for (std::set<const llvm::Function *>::iterator it = data.functionCalls.begin(),
+								ie = data.functionCalls.end();
+			it != ie; it++) {
+		const llvm::Function * function = *it;
+		O << "\t>" << function->getName() << "\n";
+	}
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
@@ -87,13 +94,6 @@ void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
 		visitor->join(bb_data, data);
 	}
 	print(O, data);
-	O << "Function calls: Indirect: " << visitor->indirectFunctionCallCount << "\n";
-	for (std::vector<const llvm::Function *>::iterator it = visitor->functionCalls.begin(),
-								ie = visitor->functionCalls.end();
-			it != ie; it++) {
-		const llvm::Function * function = *it;
-		O << "\t>" << function->getName() << "\n";
-	}
 }
 
 char MemoryAccess::ID = 0;
