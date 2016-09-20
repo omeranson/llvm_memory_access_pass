@@ -124,16 +124,26 @@ StoredValue Evaluator::visitBinaryOperator(llvm::BinaryOperator & bo) {
 	return result;
 }
 
+static const char * heap_allocation_functions[] = {
+	"malloc",
+	"realloc",
+	0
+};
 StoredValue Evaluator::visitCallInst(llvm::CallInst & ci) {
 	llvm::Function * function = ci.getCalledFunction();
 	if (!function) {
 		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
 		return StoredValue::top;
 	}
-	const char * functionName = function->getName().data();
-	const char * malloc = strstr(functionName, "malloc");
-	const char * realloc = strstr(functionName, "realloc");
-	if (!(malloc || realloc)) {
+	bool isHeapAlloc = false;
+	const std::string & functionName = function->getName().str();
+	for (int idx = 0; heap_allocation_functions[idx]; idx++) {
+		if (functionName == heap_allocation_functions[idx]) {
+			isHeapAlloc = true;
+			break;
+		}
+	}
+	if (!isHeapAlloc) {
 		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
 		return StoredValue::top;
 	}
@@ -181,6 +191,10 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 		joinStoredValues(data, epointer, values);
 	} else if (pointerType == StoredValueTypeArgument) {
 		StoredValues & values = data.argumentStores[epointer];
+		values.push_back(storedValue);
+		joinStoredValues(data, epointer, values);
+	} else if (pointerType == StoredValueTypeHeap) {
+		StoredValues & values = data.heapStores[epointer];
 		values.push_back(storedValue);
 		joinStoredValues(data, epointer, values);
 	} else {

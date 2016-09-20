@@ -68,6 +68,8 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.globalStores);
 	O << "Stores to argument pointers:\n";
 	print(O, data.argumentStores);
+	O << "Stores to the heap:\n";
+	print(O, data.heapStores);
 	O << "Stores to THE UNKNOWN:\n";
 	print(O, data.unknownStores);
 	O << "Temporaries:\n";

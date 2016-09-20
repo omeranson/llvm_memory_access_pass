@@ -148,6 +148,7 @@ namespace MemoryAccessPass {
 		StoreBaseToValuesMap stackStores;
 		StoreBaseToValuesMap globalStores;
 		StoreBaseToValuesMap argumentStores;
+		StoreBaseToValuesMap heapStores;
 		StoreBaseToValuesMap unknownStores;
 		std::map<const llvm::Value *, StoredValue> temporaries;
 		std::map<const llvm::Value *, StoredValue> stores;
