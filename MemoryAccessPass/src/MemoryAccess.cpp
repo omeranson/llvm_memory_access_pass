@@ -30,7 +30,6 @@ MemoryAccess::~MemoryAccess() {
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
 	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*visitor);
 	chaoticIteration.iterate(F);
-	//visitor->visit(F);
 	return false;
 }
 		

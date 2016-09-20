@@ -36,7 +36,7 @@ namespace llvm {
 			if (isa<Instruction>(&value)) {
 				Instruction & instruction =
 						cast<Instruction>(value);
-				return static_cast<InstVisitor<T, RetType>*>(this)->visit(instruction);
+				return InstVisitor<T, RetType>::visit(instruction);
 			}
 			if (isa<Constant>(&value)) {
 				Constant & constant = cast<Constant>(value);

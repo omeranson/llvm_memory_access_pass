@@ -1,6 +1,6 @@
 BASE = MemoryAccess MemoryAccessInstVisitor
 OBJS = $(foreach BASEFILE,$(BASE),src/$(BASEFILE).o)
-#OBJS = src/MemoryAccess.o src/MemoryAccessInstVisitor.o
+INCS = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h) include/ChaoticIteration.h include/ValueVisitor.h
 INCLUDES = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h)
 
 LLVM_INSTALL?=${HOME}/opt/llvm-install
@@ -17,13 +17,13 @@ libmemaccess.so: ${OBJS}
 	@ echo '[LD]	[$^]	[$@]'
 	@ ${CXX} -Wl,-soname,$@ -o $@ $^ ${LDFLAGS}
 
-%.o: %.c
-	@ echo '[CC]	[$^]	[$@]'
-	@ ${CC} -c -o $@ $^ ${CXXFLAGS}
+%.o: %.c ${INCS}
+	@ echo '[CC]	[$<]	[$@]'
+	@ ${CC} -c -o $@ $< ${CXXFLAGS}
 
-%.o: %.cpp
-	@ echo '[CXX]	[$^]	[$@]'
-	@ ${CXX} -c -o $@ $^ ${CXXFLAGS}
+%.o: %.cpp ${INCS}
+	@ echo '[CXX]	[$<]	[$@]'
+	@ ${CXX} -c -o $@ $< ${CXXFLAGS}
 
 clean:
 	@ echo '[RM]	[${OBJS}]'
