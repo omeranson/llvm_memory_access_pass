@@ -73,10 +73,8 @@ namespace MemoryAccessPass {
 			worklist.push_back(&BB);
 			T & visitor = getVisitor();
 			while (!worklist.empty()) {
-				std::list<llvm::BasicBlock *>::iterator
-						first_element = worklist.begin();
+				llvm::BasicBlock * element = worklist.front();
 				worklist.pop_front();
-				llvm::BasicBlock * element = *first_element;
 				visitor.visit(element);
 				populateWorklistWithSuccessors(worklist, *element);
 				worklist.sort(comparator);

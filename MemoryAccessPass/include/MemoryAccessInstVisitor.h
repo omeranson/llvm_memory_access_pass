@@ -165,12 +165,14 @@ namespace MemoryAccessPass {
 	public:
 		std::map<const llvm::BasicBlock*, MemoryAccessData*> data;
 		llvm::Function * function;
+		MemoryAccessData * functionData;
 		MemoryAccessInstVisitor();
 		~MemoryAccessInstVisitor();
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
 		void visitFunction(llvm::Function &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);
+		void join();
 		bool join(const llvm::BasicBlock * from, const llvm::BasicBlock * to);
 		bool join(const MemoryAccessData & from, MemoryAccessData & to) const;
 		bool join(const StoreBaseToValuesMap & from,

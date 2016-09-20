@@ -21,18 +21,47 @@
 
 namespace MemoryAccessPass {
 
-MemoryAccess::MemoryAccess() : llvm::FunctionPass(ID), visitor(new MemoryAccessInstVisitor()) {}
+int MemoryAccessGlobalAccessWatermark = 10;
+int MemoryAccessFunctionCallCountWatermark = 10;
+
+MemoryAccess::MemoryAccess() :
+		llvm::FunctionPass(ID), visitor(0) {}
 
 MemoryAccess::~MemoryAccess() {
 	delete visitor;
 }
 
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
+	delete visitor;
+	visitor = new MemoryAccessInstVisitor();
 	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*visitor);
 	chaoticIteration.iterate(F);
+	visitor->join();
 	return false;
 }
-		
+
+bool MemoryAccess::isSummariseFunction() {
+	if (visitor->functionData->indirectFunctionCalls.size() > 0) {
+		return false;
+	}
+	if (visitor->functionData->unknownStores.size() > 0) {
+		return false;
+	}
+	if (visitor->functionData->heapStores.size() > 0) {
+		return false;
+	}
+	if (visitor->functionData->argumentStores.size() > 0) {
+		return false;
+	}
+	if (visitor->functionData->globalStores.size() >= MemoryAccessGlobalAccessWatermark) {
+		return false;
+	}
+	if (visitor->functionData->functionCalls.size() >= MemoryAccessFunctionCallCountWatermark) {
+		return false;
+	}
+	return true;
+}
+
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
 	for (StoreBaseToValuesMap::const_iterator it = stores.begin(),
 							ie = stores.end();
@@ -85,14 +114,7 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
-	MemoryAccessData data;
-	for (llvm::Function::iterator it = visitor->function->begin(),
-				ie = visitor->function->end();
-			it != ie; it++) {
-		const MemoryAccessData &bb_data = visitor->getData(it);
-		visitor->join(bb_data, data);
-	}
-	print(O, data);
+	print(O, *visitor->functionData);
 }
 
 char MemoryAccess::ID = 0;

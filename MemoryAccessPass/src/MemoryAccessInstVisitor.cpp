@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -162,9 +163,11 @@ MemoryAccessData::MemoryAccessData() : m_evaluator(stores, temporaries) {}
 MemoryAccessData::~MemoryAccessData() {}
 
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
-		llvm::InstVisitor<MemoryAccessInstVisitor>() {}
+		llvm::InstVisitor<MemoryAccessInstVisitor>(),
+		function(0), functionData(0) {}
 
 MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
+	delete functionData;
 	for (std::map<const llvm::BasicBlock*, MemoryAccessData*>::iterator it = data.begin(),
 										ie = data.end();
 			it != ie; it++) {
@@ -175,6 +178,7 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 }
 
 void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
+	assert((!this->function) && "MemoryAccessInstVisitor::visitFunction called more than once");
 	this->function = &function;
 }
 
@@ -331,6 +335,17 @@ bool MemoryAccessInstVisitor::join(const llvm::BasicBlock * from, const llvm::Ba
 	}
 	MemoryAccessData & toData = getData(to);
 	return join(fromData, toData) || result;
+}
+
+void MemoryAccessInstVisitor::join() {
+	assert((!functionData) && "MemoryAccessInstVisitor::join called more than once");
+	functionData = new MemoryAccessData();
+	for (llvm::Function::iterator it = function->begin(),
+				ie = function->end();
+			it != ie; it++) {
+		const MemoryAccessData &bb_data = getData(it);
+		join(bb_data, *functionData);
+	}
 }
 
 MemoryAccessData & MemoryAccessInstVisitor::getData(const llvm::BasicBlock * bb) {
