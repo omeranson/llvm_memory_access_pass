@@ -12,6 +12,8 @@
 #include <ValueVisitor.h>
 
 namespace MemoryAccessPass {
+	extern int MemoryAccessGlobalAccessWatermark;
+	extern int MemoryAccessFunctionCallCountWatermark;
 
 	typedef enum {
 		StoredValueTypeUnknown = 0,
@@ -169,6 +171,8 @@ namespace MemoryAccessPass {
 		MemoryAccessInstVisitor();
 		~MemoryAccessInstVisitor();
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
+		void runOnFunction(llvm::Function &);
+		bool isSummariseFunction() const;
 		void visitFunction(llvm::Function &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);

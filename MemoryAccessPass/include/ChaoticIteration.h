@@ -64,6 +64,9 @@ namespace MemoryAccessPass {
 		void iterate(llvm::Function * F) { return iterate(*F); }
 		void iterate(llvm::Function & F) {
 			getVisitor().visitFunction(F);
+			if (F.empty()) {
+				return;
+			}
 			return iterate(F.getEntryBlock());
 		}
 		void iterate(llvm::BasicBlock * BB) { return iterate(*BB); }

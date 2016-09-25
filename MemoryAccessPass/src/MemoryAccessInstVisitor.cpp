@@ -3,9 +3,14 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include <ChaoticIteration.h>
 #include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
+
+int MemoryAccessGlobalAccessWatermark = 10;
+int MemoryAccessFunctionCallCountWatermark = 10;
+
 
 StoredValue StoredValue::top = StoredValue();
 
@@ -175,6 +180,34 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 		delete data;
 		it->second = 0;
 	}
+}
+
+void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F) {
+	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*this);
+	chaoticIteration.iterate(F);
+	join();
+}
+
+bool MemoryAccessInstVisitor::isSummariseFunction() const {
+	if (functionData->indirectFunctionCalls.size() > 0) {
+		return false;
+	}
+	if (functionData->unknownStores.size() > 0) {
+		return false;
+	}
+	if (functionData->heapStores.size() > 0) {
+		return false;
+	}
+	if (functionData->argumentStores.size() > 0) {
+		return false;
+	}
+	if (functionData->globalStores.size() >= MemoryAccessGlobalAccessWatermark) {
+		return false;
+	}
+	if (functionData->functionCalls.size() >= MemoryAccessFunctionCallCountWatermark) {
+		return false;
+	}
+	return true;
 }
 
 void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {

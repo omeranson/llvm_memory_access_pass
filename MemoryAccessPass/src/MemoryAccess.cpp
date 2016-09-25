@@ -1,3 +1,4 @@
+#include <cassert>
 #include <list>
 #include <set>
 #include <map>
@@ -11,18 +12,13 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/InstrTypes.h>
-//#include <llvm/IR/DebugLoc.h>
 #include <llvm/DebugInfo.h>
 #include <llvm/IR/Constants.h>
 
-#include <ChaoticIteration.h>
 #include <MemoryAccess.h>
 #include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
-
-int MemoryAccessGlobalAccessWatermark = 10;
-int MemoryAccessFunctionCallCountWatermark = 10;
 
 MemoryAccess::MemoryAccess() :
 		llvm::FunctionPass(ID), visitor(0) {}
@@ -34,32 +30,13 @@ MemoryAccess::~MemoryAccess() {
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
 	delete visitor;
 	visitor = new MemoryAccessInstVisitor();
-	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*visitor);
-	chaoticIteration.iterate(F);
-	visitor->join();
+	visitor->runOnFunction(F);
 	return false;
 }
 
-bool MemoryAccess::isSummariseFunction() {
-	if (visitor->functionData->indirectFunctionCalls.size() > 0) {
-		return false;
-	}
-	if (visitor->functionData->unknownStores.size() > 0) {
-		return false;
-	}
-	if (visitor->functionData->heapStores.size() > 0) {
-		return false;
-	}
-	if (visitor->functionData->argumentStores.size() > 0) {
-		return false;
-	}
-	if (visitor->functionData->globalStores.size() >= MemoryAccessGlobalAccessWatermark) {
-		return false;
-	}
-	if (visitor->functionData->functionCalls.size() >= MemoryAccessFunctionCallCountWatermark) {
-		return false;
-	}
-	return true;
+bool MemoryAccess::isSummariseFunction() const {
+	assert(visitor && "isSummariseFunction called before runOnFunction");
+	return visitor->isSummariseFunction();
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
@@ -100,10 +77,6 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.heapStores);
 	O << "Stores to THE UNKNOWN:\n";
 	print(O, data.unknownStores);
-	O << "Temporaries:\n";
-	print(O, data.temporaries);
-	O << "Stores:\n";
-	print(O, data.stores);
 	O << "Function calls: Indirect: " << data.indirectFunctionCalls.size() << " Direct:\n";
 	for (std::set<const llvm::Function *>::iterator it = data.functionCalls.begin(),
 								ie = data.functionCalls.end();
@@ -111,6 +84,10 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 		const llvm::Function * function = *it;
 		O << "\t>" << function->getName() << "\n";
 	}
+	O << "Temporaries:\n";
+	print(O, data.temporaries);
+	O << "Stores:\n";
+	print(O, data.stores);
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {

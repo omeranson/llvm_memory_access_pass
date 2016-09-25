@@ -8,8 +8,6 @@
 #include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
-	extern int MemoryAccessGlobalAccessWatermark;
-	extern int MemoryAccessFunctionCallCountWatermark;
 	class MemoryAccess : public llvm::FunctionPass {
 	private:
 		MemoryAccessInstVisitor * visitor;
@@ -23,7 +21,7 @@ namespace MemoryAccessPass {
 		void print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const;
 		void print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue> & temporaries) const;
 
-		bool isSummariseFunction();
+		bool isSummariseFunction() const;
 	};
 }
 #endif // MEMORY_ACCESS_H
