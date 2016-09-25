@@ -8,6 +8,8 @@
 #include <MemoryAccessInstVisitor.h>
 
 namespace MemoryAccessPass {
+	extern int MemoryAccessGlobalAccessWatermark;
+	extern int MemoryAccessFunctionCallCountWatermark;
 	class MemoryAccess : public llvm::FunctionPass {
 	private:
 		MemoryAccessInstVisitor * visitor;
