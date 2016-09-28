@@ -10,8 +10,8 @@ namespace MemoryAccessPass {
 
 int MemoryAccessArgumentAccessWatermark = 10;
 int MemoryAccessGlobalAccessWatermark = 10;
-int MemoryAccessFunctionCallCountWatermark = 0;
-char * predefinedFunctions[] = {
+int MemoryAccessFunctionCallCountWatermark = 10;
+const char * predefinedFunctions[] = {
 	"klee_int",
 	"__assert_fail",
 	0
@@ -453,22 +453,14 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 		}
 		unsigned index = argument->getArgNo();
 		llvm::Value * parameter = ci.getArgOperand(index);
-		std::map<const llvm::Value *, StoredValue>::iterator paramIt =
-				data.temporaries.find(parameter);
-		if (paramIt == data.temporaries.end()) {
-			llvm::errs() << "Store to inner argument, but unknown operand: " << *parameter << "\n";
-			data.unknownStores.insert(std::make_pair(parameter, it->second));
-			result = true;
-			continue;
-		}
-		StoredValue & value = paramIt->second;
+		StoredValue value = data.m_evaluator.visit(parameter);
 		if (value.isTop()) {
 			llvm::errs() << "Store to inner argument, but operand is top: " << *parameter << "\n";
 			data.unknownStores.insert(std::make_pair(parameter, it->second));
 			result = true;
 			continue;
 		}
-		llvm::Value * evaluatedParameter = paramIt->second.value;
+		llvm::Value * evaluatedParameter = value.value;
 		StoredValue storedEvaluatedParameter = data.m_evaluator.visit(evaluatedParameter);
 		store(data, storedEvaluatedParameter, value);
 		result = true;
