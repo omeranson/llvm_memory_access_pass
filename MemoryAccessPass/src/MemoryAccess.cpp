@@ -39,6 +39,11 @@ bool MemoryAccess::isSummariseFunction() const {
 	return visitor->isSummariseFunction();
 }
 
+const MemoryAccessData * MemoryAccess::getSummaryData() const {
+	assert(visitor && "isSummariseFunction called before runOnFunction");
+	return visitor->functionData;
+}
+
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
 	for (StoreBaseToValuesMap::const_iterator it = stores.begin(),
 							ie = stores.end();
@@ -88,6 +93,7 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	print(O, data.temporaries);
 	O << "Stores:\n";
 	print(O, data.stores);
+	O << "Is summarise: " << isSummariseFunction() << "\n";
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {

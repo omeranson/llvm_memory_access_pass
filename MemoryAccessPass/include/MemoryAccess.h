@@ -22,6 +22,7 @@ namespace MemoryAccessPass {
 		void print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue> & temporaries) const;
 
 		bool isSummariseFunction() const;
+		const MemoryAccessData * getSummaryData() const;
 	};
 }
 #endif // MEMORY_ACCESS_H
