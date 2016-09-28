@@ -201,10 +201,10 @@ bool MemoryAccessInstVisitor::isSummariseFunction() const {
 	if (functionData->argumentStores.size() > 0) {
 		return false;
 	}
-	if (functionData->globalStores.size() >= MemoryAccessGlobalAccessWatermark) {
+	if (functionData->globalStores.size() > MemoryAccessGlobalAccessWatermark) {
 		return false;
 	}
-	if (functionData->functionCalls.size() >= MemoryAccessFunctionCallCountWatermark) {
+	if (functionData->functionCalls.size() > MemoryAccessFunctionCallCountWatermark) {
 		return false;
 	}
 	return true;
