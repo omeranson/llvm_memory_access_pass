@@ -11,19 +11,23 @@ namespace MemoryAccessPass {
 int MemoryAccessArgumentAccessWatermark = 10;
 int MemoryAccessGlobalAccessWatermark = 10;
 int MemoryAccessFunctionCallCountWatermark = 0;
-
+char * predefinedFunctions[] = {
+	"klee_int",
+	"__assert_fail",
+	0
+};
 
 StoredValue StoredValue::top = StoredValue();
 
 StoredValue Evaluator::visitGlobalValue(llvm::GlobalValue & globalValue) {
-	const llvm::Value * value = &globalValue;
+	llvm::Value * value = &globalValue;
 	StoredValue result(value, StoredValueTypeGlobal);
 	m_cache.insert(std::make_pair(value, result));
 	return result;
 }
 
 StoredValue Evaluator::visitAllocaInst(llvm::AllocaInst & allocaInst) {
-	const llvm::Value * value = &allocaInst;
+	llvm::Value * value = &allocaInst;
 	StoredValue result(value, StoredValueTypeStack);
 	m_cache.insert(std::make_pair(value, result));
 	return result;
@@ -183,7 +187,20 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 	}
 }
 
+bool MemoryAccessInstVisitor::isPredefinedFunction(llvm::Function & F) const {
+	for (int idx = 0; predefinedFunctions[idx]; idx++) {
+		if (F.getName() == predefinedFunctions[idx]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCache * cache) {
+	if (isPredefinedFunction(F)) {
+		functionData = new MemoryAccessData();
+		return;
+	}
 	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*this);
 	chaoticIteration.iterate(F);
 	join(cache);
@@ -223,29 +240,34 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 	MemoryAccessData & data = getData(basicBlock);
 	StoredValue storedPointer = data.m_evaluator.visit(pointer);
 	StoredValue storedValue = data.m_evaluator.visit(value);
-	const StoredValueType pointerType = storedPointer.type;
+	store(data, storedPointer, storedValue);
+}
+
+void MemoryAccessInstVisitor::store(MemoryAccessData & data,
+		StoredValue & pointer, StoredValue & value) {
+	const StoredValueType pointerType = pointer.type;
 	// We want to keep working with the evaluated pointer.
-	const llvm::Value * epointer = storedPointer.value;
+	const llvm::Value * epointer = pointer.value;
 	if (pointerType == StoredValueTypeStack) {
 		StoredValues & values = data.stackStores[epointer];
-		values.push_back(storedValue);
+		values.push_back(value);
 		joinStoredValues(data, epointer, values);
 	} else if (pointerType == StoredValueTypeGlobal) {
 		StoredValues & values = data.globalStores[epointer];
-		values.push_back(storedValue);
+		values.push_back(value);
 		joinStoredValues(data, epointer, values);
 	} else if (pointerType == StoredValueTypeArgument) {
 		StoredValues & values = data.argumentStores[epointer];
-		values.push_back(storedValue);
+		values.push_back(value);
 		joinStoredValues(data, epointer, values);
 	} else if (pointerType == StoredValueTypeHeap) {
 		StoredValues & values = data.heapStores[epointer];
-		values.push_back(storedValue);
+		values.push_back(value);
 		joinStoredValues(data, epointer, values);
 	} else {
-		llvm::errs() << "This UNKNOWN is: " << storedPointer << "\n";
+		llvm::errs() << "This UNKNOWN is: " << pointer << "\n";
 		StoredValues & values = data.unknownStores[epointer];
-		values.push_back(storedValue);
+		values.push_back(value);
 		joinStoredValues(data, epointer, values);
 	}
 }
@@ -266,9 +288,9 @@ void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
 	MemoryAccessData & data = getData(basicBlock);
 	const llvm::Function * callee = ci.getCalledFunction();
 	if (callee) {
-		data.functionCalls.insert(callee);
+		data.functionCalls.insert(&ci);
 	} else {
-		data.indirectFunctionCalls.insert(callee);
+		data.indirectFunctionCalls.insert(&ci);
 		llvm::errs() << "Indirect function call: " <<
 				*(ci.getCalledValue()) << "\n";
 	}
@@ -380,6 +402,78 @@ void MemoryAccessInstVisitor::join(MemoryAccessCache * cache) {
 		const MemoryAccessData &bb_data = getData(it);
 		join(bb_data, *functionData);
 	}
+	if (!cache) {
+		return;
+	}
+	// Now join over function calls
+	// TODO(oanson) Handle recursive calls
+	for (std::set<const llvm::CallInst *>::iterator it = functionData->functionCalls.begin(),
+						ie = functionData->functionCalls.end();
+			it != ie; it++) {
+		const llvm::CallInst * ci = *it;
+		joinCall(*ci, cache);
+	}
+}
+
+bool MemoryAccessInstVisitor::joinCall(const llvm::CallInst & ci, MemoryAccessCache * cache) {
+	llvm::Function * F = ci.getCalledFunction();
+	if (isPredefinedFunction(*F)) {
+		return false;
+	}
+	llvm::errs() << "Joining called function: " << F->getName() << "\n";
+	const MemoryAccessInstVisitor * visitor = cache->getVisitor(F);
+	// Cache already returns visitor after call to join, so no need
+	// for nested treatment
+	const MemoryAccessData & calleeData = *(visitor->functionData);
+	MemoryAccessData & data = *functionData;
+	bool result = false;
+	result |= join(calleeData.globalStores, data.globalStores);
+	result |= join(calleeData.heapStores, data.unknownStores);
+	result |= join(calleeData.unknownStores, data.unknownStores);
+	result |= joinCalleeArguments(ci, visitor);
+	return result;
+}
+
+bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
+		const MemoryAccessInstVisitor * visitor) {
+	const MemoryAccessData & calleeData = *(visitor->functionData);
+	MemoryAccessData & data = *functionData;
+	// TODO(oanson) result value may be calculated wrongly.
+	bool result = false;
+	for (StoreBaseToValuesMap::const_iterator it = calleeData.argumentStores.begin(),
+						ie = calleeData.argumentStores.end();
+			it != ie; it++) {
+		const llvm::Value * argumentValue = it->first;
+		const llvm::Argument * argument = llvm::dyn_cast<llvm::Argument>(argumentValue);
+		if (!argument) {
+			llvm::errs() << "Store to inner argument, but not an argument: " << *argumentValue << "\n";
+			data.unknownStores.insert(std::make_pair(it->first, it->second));
+			result = true;
+			continue;
+		}
+		unsigned index = argument->getArgNo();
+		llvm::Value * parameter = ci.getArgOperand(index);
+		std::map<const llvm::Value *, StoredValue>::iterator paramIt =
+				data.temporaries.find(parameter);
+		if (paramIt == data.temporaries.end()) {
+			llvm::errs() << "Store to inner argument, but unknown operand: " << *parameter << "\n";
+			data.unknownStores.insert(std::make_pair(parameter, it->second));
+			result = true;
+			continue;
+		}
+		StoredValue & value = paramIt->second;
+		if (value.isTop()) {
+			llvm::errs() << "Store to inner argument, but operand is top: " << *parameter << "\n";
+			data.unknownStores.insert(std::make_pair(parameter, it->second));
+			result = true;
+			continue;
+		}
+		llvm::Value * evaluatedParameter = paramIt->second.value;
+		StoredValue storedEvaluatedParameter = data.m_evaluator.visit(evaluatedParameter);
+		store(data, storedEvaluatedParameter, value);
+		result = true;
+	}
+	return result;
 }
 
 MemoryAccessData & MemoryAccessInstVisitor::getData(const llvm::BasicBlock * bb) {

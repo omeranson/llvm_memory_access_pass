@@ -16,6 +16,7 @@ namespace MemoryAccessPass {
 	extern int MemoryAccessGlobalAccessWatermark;
 	extern int MemoryAccessArgumentAccessWatermark;
 	extern int MemoryAccessFunctionCallCountWatermark;
+	extern char * predefinedFunctions[];
 
 	typedef enum {
 		StoredValueTypeUnknown = 0,
@@ -28,11 +29,11 @@ namespace MemoryAccessPass {
 	} StoredValueType;
 
 	struct StoredValue {
-		const llvm::Value * value;
+		llvm::Value * value;
 		StoredValueType type;
 
 		StoredValue() : value(0), type(StoredValueTypeUnknown) {}
-		StoredValue(const llvm::Value * a_value,
+		StoredValue(llvm::Value * a_value,
 				const StoredValueType a_type) :
 						value(a_value), type(a_type) {}
 		StoredValue(const StoredValue & sv) :
@@ -156,8 +157,8 @@ namespace MemoryAccessPass {
 		StoreBaseToValuesMap unknownStores;
 		std::map<const llvm::Value *, StoredValue> temporaries;
 		std::map<const llvm::Value *, StoredValue> stores;
-		std::set<const llvm::Function *> functionCalls;
-		std::set<const llvm::Function *> indirectFunctionCalls;
+		std::set<const llvm::CallInst *> functionCalls;
+		std::set<const llvm::CallInst *> indirectFunctionCalls;
 		//MemoryAccessData(MemoryAccessData& ); // TODO Copy constructor
 
 		MemoryAccessData();
@@ -175,9 +176,11 @@ namespace MemoryAccessPass {
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
 		void runOnFunction(llvm::Function &, MemoryAccessCache * cache = 0);
 		bool isSummariseFunction() const;
+		bool isPredefinedFunction(llvm::Function & F) const;
 		void visitFunction(llvm::Function &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);
+		void store(MemoryAccessData & data, StoredValue & pointer, StoredValue & value);
 		void join(MemoryAccessCache * cache = 0);
 		bool join(const llvm::BasicBlock * from, const llvm::BasicBlock * to);
 		bool join(const MemoryAccessData & from, MemoryAccessData & to) const;
@@ -188,6 +191,9 @@ namespace MemoryAccessPass {
 		template <class T>
 		bool join(const std::set<const T *> & from,
 				std::set<const T *> & to) const;
+		bool joinCall(const llvm::CallInst & ci, MemoryAccessCache * cache);
+		bool joinCalleeArguments(const llvm::CallInst & ci,
+				const MemoryAccessInstVisitor * visitor);
 		void joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values);
 		void insertNoDups(
 			StoredValues &fromValues,

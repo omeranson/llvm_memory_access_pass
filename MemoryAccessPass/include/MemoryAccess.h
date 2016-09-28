@@ -12,7 +12,7 @@
 
 namespace MemoryAccessPass {
 	class MemoryAccess : public llvm::FunctionPass {
-	private:
+	protected:
 		MemoryAccessInstVisitor * lastVisitor;
 		std::map<llvm::Function *, MemoryAccessInstVisitor *> visitors;
 		MemoryAccessInstVisitor * getModifiableVisitor(llvm::Function *F);

@@ -28,6 +28,7 @@ MemoryAccess::~MemoryAccess() {
 			it = visitors.begin(), ie = visitors.end();
 			it != ie; it++) {
 		delete it->second;
+		it->second = 0;
 	}
 }
 
@@ -52,7 +53,7 @@ MemoryAccessInstVisitor * MemoryAccess::getModifiableVisitor(llvm::Function *F) 
 		visitor = new MemoryAccessInstVisitor();
 		MemoryAccessCacheDuck<MemoryAccess> cache(*this);
 		visitor->runOnFunction(*F, &cache);
-		visitors[F] = lastVisitor;
+		visitors[F] = visitor;
 	}
 	return visitor;
 }
@@ -100,10 +101,11 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	O << "Stores to THE UNKNOWN:\n";
 	print(O, data.unknownStores);
 	O << "Function calls: Indirect: " << data.indirectFunctionCalls.size() << " Direct:\n";
-	for (std::set<const llvm::Function *>::iterator it = data.functionCalls.begin(),
+	for (std::set<const llvm::CallInst *>::iterator it = data.functionCalls.begin(),
 								ie = data.functionCalls.end();
 			it != ie; it++) {
-		const llvm::Function * function = *it;
+		const llvm::CallInst * ci = *it;
+		const llvm::Function * function = ci->getCalledFunction();
 		O << "\t>" << function->getName() << "\n";
 	}
 	O << "Temporaries:\n";
