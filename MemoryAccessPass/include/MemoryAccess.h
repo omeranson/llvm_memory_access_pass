@@ -11,6 +11,10 @@
 #include <MemoryAccessCache.h>
 
 namespace MemoryAccessPass {
+
+	extern const char * predefinedFunctions[];
+	bool isPredefinedFunction(llvm::Function & F);
+
 	class MemoryAccess : public llvm::FunctionPass {
 	protected:
 		MemoryAccessInstVisitor * lastVisitor;

@@ -20,6 +20,27 @@
 
 namespace MemoryAccessPass {
 
+const char * predefinedFunctions[] = {
+	"__assert_fail",
+	"exit",
+	"_exit",
+	0
+};
+
+bool isPredefinedFunction(llvm::Function & F) {
+	llvm::StringRef name = F.getName();
+	if (name.startswith("klee_")) {
+		return true;
+	}
+	for (int idx = 0; predefinedFunctions[idx]; idx++) {
+		if (name.equals(predefinedFunctions[idx])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
 MemoryAccess::MemoryAccess() :
 		llvm::FunctionPass(ID), lastVisitor(0) {}
 

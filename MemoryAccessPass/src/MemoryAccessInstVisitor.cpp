@@ -8,14 +8,11 @@
 
 namespace MemoryAccessPass {
 
+bool isPredefinedFunction(llvm::Function & F);
+
 int MemoryAccessArgumentAccessWatermark = 10;
 int MemoryAccessGlobalAccessWatermark = 10;
 int MemoryAccessFunctionCallCountWatermark = 10;
-const char * predefinedFunctions[] = {
-	"klee_int",
-	"__assert_fail",
-	0
-};
 
 StoredValue StoredValue::top = StoredValue();
 
@@ -185,15 +182,6 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 		delete data;
 		it->second = 0;
 	}
-}
-
-bool MemoryAccessInstVisitor::isPredefinedFunction(llvm::Function & F) const {
-	for (int idx = 0; predefinedFunctions[idx]; idx++) {
-		if (F.getName() == predefinedFunctions[idx]) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCache * cache) {

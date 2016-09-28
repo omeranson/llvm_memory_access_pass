@@ -16,7 +16,6 @@ namespace MemoryAccessPass {
 	extern int MemoryAccessGlobalAccessWatermark;
 	extern int MemoryAccessArgumentAccessWatermark;
 	extern int MemoryAccessFunctionCallCountWatermark;
-	extern const char * predefinedFunctions[];
 
 	typedef enum {
 		StoredValueTypeUnknown = 0,
@@ -176,7 +175,6 @@ namespace MemoryAccessPass {
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
 		void runOnFunction(llvm::Function &, MemoryAccessCache * cache = 0);
 		bool isSummariseFunction() const;
-		bool isPredefinedFunction(llvm::Function & F) const;
 		void visitFunction(llvm::Function &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);
