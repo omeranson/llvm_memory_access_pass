@@ -8,12 +8,14 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <MemoryAccessInstVisitor.h>
+#include <MemoryAccessCache.h>
 
 namespace MemoryAccessPass {
 	class MemoryAccess : public llvm::FunctionPass {
 	private:
 		MemoryAccessInstVisitor * lastVisitor;
 		std::map<llvm::Function *, MemoryAccessInstVisitor *> visitors;
+		MemoryAccessInstVisitor * getModifiableVisitor(llvm::Function *F);
 	public:
 		static char ID;
 		MemoryAccess();
@@ -26,6 +28,7 @@ namespace MemoryAccessPass {
 
 		bool isSummariseFunction() const;
 		const MemoryAccessData * getSummaryData() const;
+		const MemoryAccessInstVisitor * getVisitor(llvm::Function *F);
 	};
 }
 #endif // MEMORY_ACCESS_H

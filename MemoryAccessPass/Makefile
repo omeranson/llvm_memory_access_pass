@@ -1,6 +1,6 @@
 BASE = MemoryAccess MemoryAccessInstVisitor
 OBJS = $(foreach BASEFILE,$(BASE),src/$(BASEFILE).o)
-INCS = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h) include/ChaoticIteration.h include/ValueVisitor.h
+INCS = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h) include/ChaoticIteration.h include/ValueVisitor.h include/MemoryAccessCache.h
 INCLUDES = $(foreach BASEFILE,$(BASE),include/$(BASEFILE).h)
 
 LLVM_INSTALL?=${HOME}/opt/llvm-install

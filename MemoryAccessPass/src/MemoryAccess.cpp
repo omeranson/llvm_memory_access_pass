@@ -32,12 +32,7 @@ MemoryAccess::~MemoryAccess() {
 }
 
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
-	lastVisitor = visitors[&F];
-	if (!lastVisitor) {
-		lastVisitor = new MemoryAccessInstVisitor();
-		lastVisitor->runOnFunction(F);
-		visitors[&F] = lastVisitor;
-	}
+	lastVisitor = getModifiableVisitor(&F);
 	return false;
 }
 
@@ -49,6 +44,21 @@ bool MemoryAccess::isSummariseFunction() const {
 const MemoryAccessData * MemoryAccess::getSummaryData() const {
 	assert(lastVisitor && "isSummariseFunction called before runOnFunction");
 	return lastVisitor->functionData;
+}
+
+MemoryAccessInstVisitor * MemoryAccess::getModifiableVisitor(llvm::Function *F) {
+	MemoryAccessInstVisitor * visitor = visitors[F];
+	if (!visitor) {
+		visitor = new MemoryAccessInstVisitor();
+		MemoryAccessCacheDuck<MemoryAccess> cache(*this);
+		visitor->runOnFunction(*F, &cache);
+		visitors[F] = lastVisitor;
+	}
+	return visitor;
+}
+
+const MemoryAccessInstVisitor * MemoryAccess::getVisitor(llvm::Function *F) {
+	return getModifiableVisitor(F);
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {

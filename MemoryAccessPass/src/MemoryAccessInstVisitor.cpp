@@ -183,10 +183,10 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 	}
 }
 
-void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F) {
+void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCache * cache) {
 	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*this);
 	chaoticIteration.iterate(F);
-	join();
+	join(cache);
 }
 
 bool MemoryAccessInstVisitor::isSummariseFunction() const {
@@ -371,7 +371,7 @@ bool MemoryAccessInstVisitor::join(const llvm::BasicBlock * from, const llvm::Ba
 	return join(fromData, toData) || result;
 }
 
-void MemoryAccessInstVisitor::join() {
+void MemoryAccessInstVisitor::join(MemoryAccessCache * cache) {
 	assert((!functionData) && "MemoryAccessInstVisitor::join called more than once");
 	functionData = new MemoryAccessData();
 	for (llvm::Function::iterator it = function->begin(),

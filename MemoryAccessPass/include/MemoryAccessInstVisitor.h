@@ -9,6 +9,7 @@
 #include <llvm/InstVisitor.h>
 #include <llvm/IR/Instructions.h>
 
+#include <MemoryAccessCache.h>
 #include <ValueVisitor.h>
 
 namespace MemoryAccessPass {
@@ -172,12 +173,12 @@ namespace MemoryAccessPass {
 		MemoryAccessInstVisitor();
 		~MemoryAccessInstVisitor();
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);
-		void runOnFunction(llvm::Function &);
+		void runOnFunction(llvm::Function &, MemoryAccessCache * cache = 0);
 		bool isSummariseFunction() const;
 		void visitFunction(llvm::Function &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);
-		void join();
+		void join(MemoryAccessCache * cache = 0);
 		bool join(const llvm::BasicBlock * from, const llvm::BasicBlock * to);
 		bool join(const MemoryAccessData & from, MemoryAccessData & to) const;
 		bool join(const StoreBaseToValuesMap & from,
