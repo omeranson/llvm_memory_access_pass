@@ -1,5 +1,7 @@
 #ifndef MEMORY_ACCESS_H
 #define MEMORY_ACCESS_H
+#include <map>
+
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
@@ -10,7 +12,8 @@
 namespace MemoryAccessPass {
 	class MemoryAccess : public llvm::FunctionPass {
 	private:
-		MemoryAccessInstVisitor * visitor;
+		MemoryAccessInstVisitor * lastVisitor;
+		std::map<llvm::Function *, MemoryAccessInstVisitor *> visitors;
 	public:
 		static char ID;
 		MemoryAccess();

@@ -21,27 +21,34 @@
 namespace MemoryAccessPass {
 
 MemoryAccess::MemoryAccess() :
-		llvm::FunctionPass(ID), visitor(0) {}
+		llvm::FunctionPass(ID), lastVisitor(0) {}
 
 MemoryAccess::~MemoryAccess() {
-	delete visitor;
+	for (std::map<llvm::Function *, MemoryAccessInstVisitor *>::iterator
+			it = visitors.begin(), ie = visitors.end();
+			it != ie; it++) {
+		delete it->second;
+	}
 }
 
 bool MemoryAccess::runOnFunction(llvm::Function &F) {
-	delete visitor;
-	visitor = new MemoryAccessInstVisitor();
-	visitor->runOnFunction(F);
+	lastVisitor = visitors[&F];
+	if (!lastVisitor) {
+		lastVisitor = new MemoryAccessInstVisitor();
+		lastVisitor->runOnFunction(F);
+		visitors[&F] = lastVisitor;
+	}
 	return false;
 }
 
 bool MemoryAccess::isSummariseFunction() const {
-	assert(visitor && "isSummariseFunction called before runOnFunction");
-	return visitor->isSummariseFunction();
+	assert(lastVisitor && "isSummariseFunction called before runOnFunction");
+	return lastVisitor->isSummariseFunction();
 }
 
 const MemoryAccessData * MemoryAccess::getSummaryData() const {
-	assert(visitor && "isSummariseFunction called before runOnFunction");
-	return visitor->functionData;
+	assert(lastVisitor && "isSummariseFunction called before runOnFunction");
+	return lastVisitor->functionData;
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
@@ -97,7 +104,7 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
-	print(O, *visitor->functionData);
+	print(O, *lastVisitor->functionData);
 }
 
 char MemoryAccess::ID = 0;
