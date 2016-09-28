@@ -13,6 +13,7 @@
 
 namespace MemoryAccessPass {
 	extern int MemoryAccessGlobalAccessWatermark;
+	extern int MemoryAccessArgumentAccessWatermark;
 	extern int MemoryAccessFunctionCallCountWatermark;
 
 	typedef enum {

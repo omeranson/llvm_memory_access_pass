@@ -8,8 +8,9 @@
 
 namespace MemoryAccessPass {
 
+int MemoryAccessArgumentAccessWatermark = 10;
 int MemoryAccessGlobalAccessWatermark = 10;
-int MemoryAccessFunctionCallCountWatermark = 10;
+int MemoryAccessFunctionCallCountWatermark = 0;
 
 
 StoredValue StoredValue::top = StoredValue();
@@ -198,7 +199,7 @@ bool MemoryAccessInstVisitor::isSummariseFunction() const {
 	if (functionData->heapStores.size() > 0) {
 		return false;
 	}
-	if (functionData->argumentStores.size() > 0) {
+	if (functionData->argumentStores.size() > MemoryAccessArgumentAccessWatermark) {
 		return false;
 	}
 	if (functionData->globalStores.size() > MemoryAccessGlobalAccessWatermark) {
