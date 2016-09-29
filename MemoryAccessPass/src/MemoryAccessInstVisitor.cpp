@@ -13,6 +13,7 @@ bool isPredefinedFunction(llvm::Function & F);
 int MemoryAccessArgumentAccessWatermark = 10;
 int MemoryAccessGlobalAccessWatermark = 10;
 int MemoryAccessFunctionCallCountWatermark = 10;
+int VisitBlockCountWatermark = 10;
 
 StoredValue StoredValue::top = StoredValue();
 
@@ -171,6 +172,7 @@ MemoryAccessData::~MemoryAccessData() {}
 
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
 		llvm::InstVisitor<MemoryAccessInstVisitor>(),
+		visitBlockCount(0), haveIHadEnough(false),
 		function(0), functionData(0) {}
 
 MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
@@ -195,6 +197,9 @@ void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCach
 }
 
 bool MemoryAccessInstVisitor::isSummariseFunction() const {
+	if (haveIHadEnough) {
+		return false;
+	}
 	if (functionData->indirectFunctionCalls.size() > 0) {
 		return false;
 	}
@@ -221,6 +226,12 @@ void MemoryAccessInstVisitor::visitFunction(llvm::Function & function) {
 	this->function = &function;
 }
 
+void MemoryAccessInstVisitor::visitBasicBlock(llvm::BasicBlock & basicBlock) {
+	if (++visitBlockCount > VisitBlockCountWatermark) {
+		haveIHadEnough = true;
+	}
+}
+
 void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 	llvm::Value * pointer = si.getPointerOperand();
 	llvm::Value * value = si.getValueOperand();
@@ -233,6 +244,9 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 
 void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 		StoredValue & pointer, StoredValue & value) {
+	if (haveIHadEnough) {
+		return;
+	}
 	const llvm::Value * epointer = pointer.value;
 	StoredValue joinedValue = joinStoredValues(data.stores, epointer, value);
 	StoreBaseToValueMap * specialisedStores;
@@ -343,6 +357,9 @@ bool MemoryAccessInstVisitor::join(const MemoryAccessData & from, MemoryAccessDa
 }
 
 bool MemoryAccessInstVisitor::join(const llvm::BasicBlock * from, const llvm::BasicBlock * to) {
+	if (haveIHadEnough) {
+		return false;
+	}
 	bool result = false;
 	MemoryAccessData & fromData = getData(from);
 	if (data.find(to) == data.end()) {
@@ -390,6 +407,10 @@ bool MemoryAccessInstVisitor::joinCall(const llvm::CallInst & ci, MemoryAccessCa
 	result |= join(calleeData.heapStores, data.unknownStores);
 	result |= join(calleeData.unknownStores, data.unknownStores);
 	result |= joinCalleeArguments(ci, visitor);
+	if ((!haveIHadEnough) && (visitor->haveIHadEnough)) {
+		haveIHadEnough = true;
+		result = true;
+	}
 	return result;
 }
 

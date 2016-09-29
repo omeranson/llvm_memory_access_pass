@@ -153,8 +153,8 @@ namespace MemoryAccessPass {
 		StoreBaseToValueMap argumentStores;
 		StoreBaseToValueMap heapStores;
 		StoreBaseToValueMap unknownStores;
-		std::map<const llvm::Value *, StoredValue> temporaries;
-		std::map<const llvm::Value *, StoredValue> stores;
+		StoreBaseToValueMap temporaries;
+		StoreBaseToValueMap stores;
 		std::set<const llvm::CallInst *> functionCalls;
 		std::set<const llvm::CallInst *> indirectFunctionCalls;
 		//MemoryAccessData(MemoryAccessData& ); // TODO Copy constructor
@@ -166,6 +166,8 @@ namespace MemoryAccessPass {
 	// Per function. For now.
 	class MemoryAccessInstVisitor : public llvm::InstVisitor<MemoryAccessInstVisitor> {
 	public:
+		int visitBlockCount;
+		bool haveIHadEnough;
 		std::map<const llvm::BasicBlock*, MemoryAccessData*> data;
 		llvm::Function * function;
 		MemoryAccessData * functionData;
@@ -175,6 +177,7 @@ namespace MemoryAccessPass {
 		void runOnFunction(llvm::Function &, MemoryAccessCache * cache = 0);
 		bool isSummariseFunction() const;
 		void visitFunction(llvm::Function &);
+		void visitBasicBlock(llvm::BasicBlock &);
 		void visitCallInst(llvm::CallInst &);
 		void visitStoreInst(llvm::StoreInst &);
 		void store(MemoryAccessData & data, StoredValue & pointer, StoredValue & value);
