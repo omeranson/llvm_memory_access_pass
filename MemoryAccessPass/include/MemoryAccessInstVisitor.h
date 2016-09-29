@@ -89,7 +89,6 @@ namespace MemoryAccessPass {
 	}
 
 	typedef std::vector<StoredValue> StoredValues;
-	typedef std::map<const llvm::Value*, StoredValues> StoreBaseToValuesMap;
 	typedef std::map<const llvm::Value*, StoredValue> StoreBaseToValueMap;
 
 	class Evaluator : public llvm::ValueVisitor<Evaluator, StoredValue> {
@@ -149,11 +148,11 @@ namespace MemoryAccessPass {
 	class MemoryAccessData {
 	public:
 		Evaluator m_evaluator;
-		StoreBaseToValuesMap stackStores;
-		StoreBaseToValuesMap globalStores;
-		StoreBaseToValuesMap argumentStores;
-		StoreBaseToValuesMap heapStores;
-		StoreBaseToValuesMap unknownStores;
+		StoreBaseToValueMap stackStores;
+		StoreBaseToValueMap globalStores;
+		StoreBaseToValueMap argumentStores;
+		StoreBaseToValueMap heapStores;
+		StoreBaseToValueMap unknownStores;
 		std::map<const llvm::Value *, StoredValue> temporaries;
 		std::map<const llvm::Value *, StoredValue> stores;
 		std::set<const llvm::CallInst *> functionCalls;
@@ -182,17 +181,16 @@ namespace MemoryAccessPass {
 		void join(MemoryAccessCache * cache = 0);
 		bool join(const llvm::BasicBlock * from, const llvm::BasicBlock * to);
 		bool join(const MemoryAccessData & from, MemoryAccessData & to) const;
-		bool join(const StoreBaseToValuesMap & from,
-				StoreBaseToValuesMap & to) const;
-		bool join(const std::map<const llvm::Value *, StoredValue> & from,
-				std::map<const llvm::Value *, StoredValue> & to)const;
+		bool join(const StoreBaseToValueMap & from,
+				StoreBaseToValueMap & to) const;
 		template <class T>
 		bool join(const std::set<const T *> & from,
 				std::set<const T *> & to) const;
 		bool joinCall(const llvm::CallInst & ci, MemoryAccessCache * cache);
 		bool joinCalleeArguments(const llvm::CallInst & ci,
 				const MemoryAccessInstVisitor * visitor);
-		void joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values);
+		StoredValue joinStoredValues(StoreBaseToValueMap & stores,
+				const llvm::Value * pointer, const StoredValue &value) const;
 		void insertNoDups(
 			StoredValues &fromValues,
 			StoredValues & toValues) const;

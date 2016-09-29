@@ -83,30 +83,12 @@ const MemoryAccessInstVisitor * MemoryAccess::getVisitor(llvm::Function *F) {
 	return getModifiableVisitor(F);
 }
 
-void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValuesMap & stores) const {
-	for (StoreBaseToValuesMap::const_iterator it = stores.begin(),
+void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValueMap & stores) const {
+	for (StoreBaseToValueMap::const_iterator it = stores.begin(),
 							ie = stores.end();
 			it != ie; it++) {
 		const llvm::Value * pointer = it->first;
-		O << "\t>" << *pointer << "\n";
-		const StoredValues & values = it->second;
-		for (StoredValues::const_iterator vit = values.begin(),
-							vie = values.end();
-				vit != vie; vit++) {
-			const StoredValue & storedValue = *vit;
-			O << "\t\t>" << storedValue << "\n";
-		}
-	}
-}
-
-void MemoryAccess::print(llvm::raw_ostream &O, const std::map<const llvm::Value *, StoredValue> & temporaries) const {
-	for (std::map<const llvm::Value *, StoredValue>::const_iterator it = temporaries.begin(),
-									ie = temporaries.end();
-			it != ie; it++) {
-		const llvm::Value * pointer = it->first;
-		O << "\t>" << *pointer << "\n";
-		const StoredValue & value = it->second;
-		O << "\t\t>" << value << "\n";
+		O << "\t>" << *pointer  << " <- " << it->second << "\n";
 	}
 }
 

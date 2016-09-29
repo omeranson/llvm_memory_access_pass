@@ -233,38 +233,38 @@ void MemoryAccessInstVisitor::visitStoreInst(llvm::StoreInst & si) {
 
 void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 		StoredValue & pointer, StoredValue & value) {
-	const StoredValueType pointerType = pointer.type;
-	// We want to keep working with the evaluated pointer.
 	const llvm::Value * epointer = pointer.value;
+	StoredValue joinedValue = joinStoredValues(data.stores, epointer, value);
+	StoreBaseToValueMap * specialisedStores;
+	const StoredValueType pointerType = pointer.type;
 	if (pointerType == StoredValueTypeStack) {
-		StoredValues & values = data.stackStores[epointer];
-		values.push_back(value);
-		joinStoredValues(data, epointer, values);
+		specialisedStores = &(data.stackStores);
 	} else if (pointerType == StoredValueTypeGlobal) {
-		StoredValues & values = data.globalStores[epointer];
-		values.push_back(value);
-		joinStoredValues(data, epointer, values);
+		specialisedStores = &(data.globalStores);
 	} else if (pointerType == StoredValueTypeArgument) {
-		StoredValues & values = data.argumentStores[epointer];
-		values.push_back(value);
-		joinStoredValues(data, epointer, values);
+		specialisedStores = &(data.argumentStores);
 	} else if (pointerType == StoredValueTypeHeap) {
-		StoredValues & values = data.heapStores[epointer];
-		values.push_back(value);
-		joinStoredValues(data, epointer, values);
+		specialisedStores = &(data.heapStores);
 	} else {
 		llvm::errs() << "This UNKNOWN is: " << pointer << "\n";
-		StoredValues & values = data.unknownStores[epointer];
-		values.push_back(value);
-		joinStoredValues(data, epointer, values);
+		specialisedStores = &(data.unknownStores);
 	}
+	specialisedStores->insert(std::make_pair(epointer, joinedValue));
 }
 
-void MemoryAccessInstVisitor::joinStoredValues(MemoryAccessData & data, const llvm::Value * pointer, StoredValues & values) {
-	if (values.size() == 1) {
-		data.stores[pointer] = *values.begin();
+StoredValue MemoryAccessInstVisitor::joinStoredValues(
+		StoreBaseToValueMap & stores,
+		const llvm::Value * epointer, const StoredValue &value) const {
+	StoreBaseToValueMap::iterator it = stores.find(epointer);
+	if (it == stores.end()) {
+		stores.insert(std::make_pair(epointer, value));
+		return value;
+	} else if (it->second != value) {
+		// Constant propogation - join -> top
+		it->second = StoredValue::top;
+		return StoredValue::top;
 	} else {
-		data.stores[pointer] = StoredValue();
+		return value;
 	}
 }
 
@@ -307,42 +307,13 @@ void MemoryAccessInstVisitor::insertNoDups(
 }
 
 bool MemoryAccessInstVisitor::join(
-		const StoreBaseToValuesMap & from,
-		StoreBaseToValuesMap & to) const {
+		const StoreBaseToValueMap & from,
+		StoreBaseToValueMap & to) const {
 	bool result = false;
-	for (StoreBaseToValuesMap::const_iterator it = from.begin(),
+	for (StoreBaseToValueMap::const_iterator it = from.begin(),
 							ie = from.end();
 			it != ie; it++) {
-		StoreBaseToValuesMap::iterator found = to.find(it->first);
-		if (found == to.end()) {
-			to[it->first] = it->second;
-		} else {
-			// Copy fromValues
-			StoredValues fromValues = it->second;
-			StoredValues & toValues = found->second;
-			std::sort(fromValues.begin(), fromValues.end());
-			std::sort(toValues.begin(), toValues.end());
-			result = result || !(std::includes(toValues.begin(), toValues.end(),
-					fromValues.begin(), fromValues.end()));
-			insertNoDups(fromValues, toValues);
-		}
-	}
-	return result;
-}
-
-bool MemoryAccessInstVisitor::join(const std::map<const llvm::Value *, StoredValue> & from,
-		std::map<const llvm::Value *, StoredValue> & to) const {
-	bool result = false;
-	for (std::map<const llvm::Value *, StoredValue>::const_iterator it = from.begin(),
-									ie = from.end();
-			it != ie; it++) {
-		std::map<const llvm::Value *, StoredValue>::iterator found = to.find(it->first);
-		if (found == to.end()) {
-			to[it->first] = it->second;
-			result = true;
-		} else if (found->second != it->second) {
-			// Replace with top
-			found->second = StoredValue();
+		if (joinStoredValues(to, it->first, it->second) != it->second) {
 			result = true;
 		}
 	}
@@ -428,7 +399,7 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 	MemoryAccessData & data = *functionData;
 	// TODO(oanson) result value may be calculated wrongly.
 	bool result = false;
-	for (StoreBaseToValuesMap::const_iterator it = calleeData.argumentStores.begin(),
+	for (StoreBaseToValueMap::const_iterator it = calleeData.argumentStores.begin(),
 						ie = calleeData.argumentStores.end();
 			it != ie; it++) {
 		const llvm::Value * argumentValue = it->first;
