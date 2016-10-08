@@ -72,9 +72,9 @@ MemoryAccessInstVisitor * MemoryAccess::getModifiableVisitor(llvm::Function *F) 
 	MemoryAccessInstVisitor * visitor = visitors[F];
 	if (!visitor) {
 		visitor = new MemoryAccessInstVisitor();
+		visitors[F] = visitor;
 		MemoryAccessCacheDuck<MemoryAccess> cache(*this);
 		visitor->runOnFunction(*F, &cache);
-		visitors[F] = visitor;
 	}
 	return visitor;
 }
