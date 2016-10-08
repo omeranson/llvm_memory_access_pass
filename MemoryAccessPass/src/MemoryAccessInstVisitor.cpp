@@ -222,6 +222,14 @@ bool MemoryAccessInstVisitor::isSummariseFunction() const {
 	if (functionData->argumentStores.size() > MemoryAccessArgumentAccessWatermark) {
 		return false;
 	}
+	for (StoreBaseToValueMap::const_iterator it = functionData->argumentStores.begin(),
+						ie = functionData->argumentStores.end();
+			it != ie; it++) {
+		const llvm::Value* key = it->first;
+		if (!llvm::isa<llvm::Argument>(key)) {
+			return false;
+		}
+	}
 	if (functionData->globalStores.size() > MemoryAccessGlobalAccessWatermark) {
 		return false;
 	}
