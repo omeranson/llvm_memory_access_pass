@@ -24,12 +24,21 @@ const char * predefinedFunctions[] = {
 	"__assert_fail",
 	"exit",
 	"_exit",
+	"malloc",
+	"realloc",
+	"free",
 	0
 };
 
 bool isPredefinedFunction(llvm::Function & F) {
 	llvm::StringRef name = F.getName();
 	if (name.startswith("klee_")) {
+		return true;
+	}
+	if (name.startswith("__cxa")) {
+		return true;
+	}
+	if (name.startswith("__cxx")) {
 		return true;
 	}
 	for (int idx = 0; predefinedFunctions[idx]; idx++) {
