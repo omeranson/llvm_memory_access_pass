@@ -148,7 +148,7 @@ static const char * heap_allocation_functions[] = {
 StoredValue Evaluator::visitCallInst(llvm::CallInst & ci) {
 	llvm::Function * function = ci.getCalledFunction();
 	if (!function) {
-		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+		//llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
 		return StoredValue::top;
 	}
 	bool isHeapAlloc = false;
@@ -160,7 +160,7 @@ StoredValue Evaluator::visitCallInst(llvm::CallInst & ci) {
 		}
 	}
 	if (!isHeapAlloc) {
-		llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+		//llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
 		return StoredValue::top;
 	}
 	StoredValue result(&ci, StoredValueTypeHeap);
@@ -188,6 +188,7 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 }
 
 void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCache * cache) {
+	assert((!functionData) && "MemoryAccessInstVisitor::runOnFunction called more than once");
 	if (isPredefinedFunction(F)) {
 		functionData = new MemoryAccessData();
 		haveIHadEnough = true;
@@ -270,7 +271,7 @@ void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 	} else if (pointerType == StoredValueTypeHeap) {
 		specialisedStores = &(data.heapStores);
 	} else {
-		llvm::errs() << "This UNKNOWN is: " << pointer << "\n";
+		//llvm::errs() << "This UNKNOWN is: " << pointer << "\n";
 		specialisedStores = &(data.unknownStores);
 	}
 	specialisedStores->insert(std::make_pair(epointer, joinedValue));
@@ -303,8 +304,8 @@ void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
 		data.functionCalls.insert(&ci);
 	} else {
 		data.indirectFunctionCalls.insert(&ci);
-		llvm::errs() << "Indirect function call: " <<
-				*(ci.getCalledValue()) << "\n";
+		//llvm::errs() << "Indirect function call: " <<
+		//		*(ci.getCalledValue()) << "\n";
 	}
 }
 
@@ -410,7 +411,6 @@ bool MemoryAccessInstVisitor::joinCall(const llvm::CallInst & ci, MemoryAccessCa
 		}
 		return false;
 	}
-	llvm::errs() << "Joining called function: " << F->getName() << "\n";
 	const MemoryAccessInstVisitor * visitor = cache->getVisitor(F);
 	// Cache already returns visitor after call to join, so no need
 	// for nested treatment
@@ -439,7 +439,7 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 		const llvm::Value * argumentValue = it->first;
 		const llvm::Argument * argument = llvm::dyn_cast<llvm::Argument>(argumentValue);
 		if (!argument) {
-			llvm::errs() << "Store to inner argument, but not an argument: " << *argumentValue << "\n";
+			//llvm::errs() << "Store to inner argument, but not an argument: " << *argumentValue << "\n";
 			data.unknownStores.insert(std::make_pair(it->first, it->second));
 			result = true;
 			continue;
@@ -448,7 +448,7 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 		llvm::Value * parameter = ci.getArgOperand(index);
 		StoredValue value = data.m_evaluator.visit(parameter);
 		if (value.isTop()) {
-			llvm::errs() << "Store to inner argument, but operand is top: " << *parameter << "\n";
+			//llvm::errs() << "Store to inner argument, but operand is top: " << *parameter << "\n";
 			data.unknownStores.insert(std::make_pair(parameter, it->second));
 			result = true;
 			continue;

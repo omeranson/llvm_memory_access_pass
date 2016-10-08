@@ -117,14 +117,14 @@ namespace MemoryAccessPass {
 		}
 
 		StoredValue visitInstruction(llvm::Instruction & instruction) {
-			llvm::errs() << __PRETTY_FUNCTION__ << ": " << instruction << ": Return top\n";
+			//llvm::errs() << __PRETTY_FUNCTION__ << ": " << instruction << ": Return top\n";
 			StoredValue result(&instruction, StoredValueTypeUnknown);
 			return result;
 		}
 		StoredValue visitArgument(llvm::Argument & argument);
 
 		StoredValue visitValue(llvm::Value & value) {
-			llvm::errs() << __PRETTY_FUNCTION__ << ": " << value << ": Return top\n";
+			//llvm::errs() << __PRETTY_FUNCTION__ << ": " << value << ": Return top\n";
 			StoredValue result(&value, StoredValueTypeUnknown);
 			return result;
 		}
@@ -137,7 +137,7 @@ namespace MemoryAccessPass {
 			return result;
 		}
 		StoredValue visitConstant(llvm::Constant & constant) {
-			llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
+			//llvm::errs() << __PRETTY_FUNCTION__ << ": Return top\n";
 			StoredValue result(&constant, StoredValueTypeUnknown);
 			return result;
 		}
