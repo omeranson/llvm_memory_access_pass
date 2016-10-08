@@ -27,6 +27,13 @@ namespace MemoryAccessPass {
 		StoredValueTypeArgument
 	} StoredValueType;
 
+	typedef enum {
+		Tristate_Unknown,
+		Tristate_False,
+		Tristate_True
+	} Tristate;
+
+
 	struct StoredValue {
 		llvm::Value * value;
 		StoredValueType type;
@@ -171,6 +178,7 @@ namespace MemoryAccessPass {
 		std::map<const llvm::BasicBlock*, MemoryAccessData*> data;
 		llvm::Function * function;
 		MemoryAccessData * functionData;
+		mutable Tristate isSummariseFunctionCache;
 		MemoryAccessInstVisitor();
 		~MemoryAccessInstVisitor();
 		MemoryAccessData & getData(const llvm::BasicBlock * bb);

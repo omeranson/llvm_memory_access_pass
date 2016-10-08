@@ -173,7 +173,8 @@ MemoryAccessData::~MemoryAccessData() {}
 MemoryAccessInstVisitor::MemoryAccessInstVisitor() :
 		llvm::InstVisitor<MemoryAccessInstVisitor>(),
 		visitBlockCount(0), haveIHadEnough(false),
-		function(0), functionData(0) {}
+		function(0), functionData(0),
+		isSummariseFunctionCache(Tristate_Unknown) {}
 
 MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 	delete functionData;
@@ -189,6 +190,8 @@ MemoryAccessInstVisitor::~MemoryAccessInstVisitor() {
 void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCache * cache) {
 	if (isPredefinedFunction(F)) {
 		functionData = new MemoryAccessData();
+		haveIHadEnough = true;
+		isSummariseFunctionCache = Tristate_False;
 		return;
 	}
 	ChaoticIteration<MemoryAccessInstVisitor> chaoticIteration(*this);
@@ -197,6 +200,12 @@ void MemoryAccessInstVisitor::runOnFunction(llvm::Function & F, MemoryAccessCach
 }
 
 bool MemoryAccessInstVisitor::isSummariseFunction() const {
+	if (isSummariseFunctionCache == Tristate_True) {
+		return true;
+	} else if (isSummariseFunctionCache == Tristate_False) {
+		return false;
+	}
+	isSummariseFunctionCache = Tristate_False;
 	if (haveIHadEnough) {
 		return false;
 	}
@@ -218,6 +227,7 @@ bool MemoryAccessInstVisitor::isSummariseFunction() const {
 	if (functionData->functionCalls.size() > MemoryAccessFunctionCallCountWatermark) {
 		return false;
 	}
+	isSummariseFunctionCache = Tristate_True;
 	return true;
 }
 
@@ -394,6 +404,10 @@ void MemoryAccessInstVisitor::join(MemoryAccessCache * cache) {
 bool MemoryAccessInstVisitor::joinCall(const llvm::CallInst & ci, MemoryAccessCache * cache) {
 	llvm::Function * F = ci.getCalledFunction();
 	if (isPredefinedFunction(*F)) {
+		if (isSummariseFunctionCache != Tristate_False) {
+			isSummariseFunctionCache = Tristate_False;
+			return true;
+		}
 		return false;
 	}
 	llvm::errs() << "Joining called function: " << F->getName() << "\n";
@@ -407,9 +421,8 @@ bool MemoryAccessInstVisitor::joinCall(const llvm::CallInst & ci, MemoryAccessCa
 	result |= join(calleeData.heapStores, data.unknownStores);
 	result |= join(calleeData.unknownStores, data.unknownStores);
 	result |= joinCalleeArguments(ci, visitor);
-	if ((!haveIHadEnough) && (visitor->haveIHadEnough)) {
-		haveIHadEnough = true;
-		result = true;
+	if ((isSummariseFunctionCache != Tristate_False) && (!visitor->isSummariseFunction())) {
+		isSummariseFunctionCache = Tristate_False;
 	}
 	return result;
 }
