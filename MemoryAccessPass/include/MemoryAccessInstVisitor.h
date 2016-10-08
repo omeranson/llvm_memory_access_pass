@@ -16,6 +16,7 @@ namespace MemoryAccessPass {
 	extern int MemoryAccessGlobalAccessWatermark;
 	extern int MemoryAccessArgumentAccessWatermark;
 	extern int MemoryAccessFunctionCallCountWatermark;
+	extern int VisitBlockCountWatermark;
 
 	typedef enum {
 		StoredValueTypeUnknown = 0,
