@@ -25,9 +25,11 @@ namespace MemoryAccessPass {
 		MemoryAccess();
 		virtual ~MemoryAccess();
 		virtual bool runOnFunction(llvm::Function &F);
+		virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const;
 		virtual void print(llvm::raw_ostream &O, const llvm::Module *M) const;
 		void print(llvm::raw_ostream &O, const MemoryAccessData & data) const;
 		void print(llvm::raw_ostream &O, const StoreBaseToValueMap & stores) const;
+		void printAA(llvm::raw_ostream &O) const;
 
 		bool isSummariseFunction() const;
 		const MemoryAccessData * getSummaryData() const;

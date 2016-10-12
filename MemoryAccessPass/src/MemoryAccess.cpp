@@ -6,14 +6,16 @@
 #include <iostream>
 #include <sstream>
 
-#include "llvm/Pass.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Support/raw_ostream.h"
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstrTypes.h>
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/AliasSetTracker.h>
 #include <llvm/DebugInfo.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/Pass.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <MemoryAccess.h>
 #include <MemoryAccessInstVisitor.h>
@@ -92,6 +94,11 @@ const MemoryAccessInstVisitor * MemoryAccess::getVisitor(llvm::Function *F) {
 	return getModifiableVisitor(F);
 }
 
+void MemoryAccess::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+	AU.setPreservesAll();
+	AU.addRequired<llvm::AliasAnalysis>();
+}
+
 void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValueMap & stores) const {
 	for (StoreBaseToValueMap::const_iterator it = stores.begin(),
 							ie = stores.end();
@@ -125,6 +132,18 @@ void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) co
 	O << "Stores:\n";
 	print(O, data.stores);
 	O << "Is summarise: " << isSummariseFunction() << "\n";
+	O << "Alias analysis info:\n";
+	printAA(O);
+}
+
+void MemoryAccess::printAA(llvm::raw_ostream &O) const {
+	llvm::AliasSetTracker tracker(getAnalysis<llvm::AliasAnalysis>());
+	const llvm::Function * F = lastVisitor->function;
+	for (llvm::Function::const_iterator it = F->begin(), ie = F->end();
+			it != ie; it++) {
+		tracker.add((llvm::BasicBlock&)*it);
+	}
+	tracker.print(O);
 }
 
 void MemoryAccess::print(llvm::raw_ostream &O, const llvm::Module *M) const {
