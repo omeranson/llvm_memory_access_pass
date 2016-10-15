@@ -35,6 +35,7 @@ namespace MemoryAccessPass {
 		bool isSummariseFunction() const;
 		const MemoryAccessData * getSummaryData() const;
 		const MemoryAccessInstVisitor * getVisitor(llvm::Function *F);
+		void clear();
 	};
 }
 #endif // MEMORY_ACCESS_H

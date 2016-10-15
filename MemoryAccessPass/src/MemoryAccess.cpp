@@ -95,6 +95,15 @@ const MemoryAccessInstVisitor * MemoryAccess::getVisitor(llvm::Function *F) {
 	return getModifiableVisitor(F);
 }
 
+void MemoryAccess::clear() {
+	for (std::map<llvm::Function *, MemoryAccessInstVisitor *>::iterator
+			it = visitors.begin(), ie = visitors.end();
+			it != ie; it++) {
+		delete it->second;
+	}
+	visitors.clear();
+}
+
 void MemoryAccess::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.setPreservesAll();
 	AU.addRequired<llvm::AliasAnalysis>();
