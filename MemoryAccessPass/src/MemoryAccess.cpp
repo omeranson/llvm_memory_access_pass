@@ -24,6 +24,7 @@ namespace MemoryAccessPass {
 
 const char * predefinedFunctions[] = {
 	"__assert_fail",
+	"__cxa_guard_acquire",
 	"exit",
 	"_exit",
 	"malloc",
@@ -108,17 +109,33 @@ void MemoryAccess::print(llvm::raw_ostream &O, const StoreBaseToValueMap & store
 	}
 }
 
+void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data,
+		const ValueSet & stores) const {
+	for (ValueSet::const_iterator it = stores.begin(),
+					ie = stores.end();
+			it != ie; it++) {
+		const llvm::Value * pointer = *it;
+		const StoreBaseToValueMap::const_iterator vit = data.stores.find(pointer);
+		O << "\t>" << *pointer  << " <- "; // << vit->second << "\n";
+		if (vit == data.stores.end()) {
+			O << StoredValue::top;
+		} else {
+			O << vit->second;
+		}
+		O << "\n";
+	}
+}
 void MemoryAccess::print(llvm::raw_ostream &O, const MemoryAccessData & data) const {
 	O << "Stores to stack:\n";
-	print(O, data.stackStores);
+	print(O, data, data.stackStores);
 	O << "Stores to globals:\n";
-	print(O, data.globalStores);
+	print(O, data, data.globalStores);
 	O << "Stores to argument pointers:\n";
-	print(O, data.argumentStores);
+	print(O, data, data.argumentStores);
 	O << "Stores to the heap:\n";
-	print(O, data.heapStores);
+	print(O, data, data.heapStores);
 	O << "Stores to THE UNKNOWN:\n";
-	print(O, data.unknownStores);
+	print(O, data, data.unknownStores);
 	O << "Function calls: Indirect: " << data.indirectFunctionCalls.size() << " Direct:\n";
 	for (std::set<const llvm::CallInst *>::iterator it = data.functionCalls.begin(),
 								ie = data.functionCalls.end();

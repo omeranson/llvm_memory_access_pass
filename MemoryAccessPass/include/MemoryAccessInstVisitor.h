@@ -98,6 +98,7 @@ namespace MemoryAccessPass {
 
 	typedef std::vector<StoredValue> StoredValues;
 	typedef std::map<const llvm::Value*, StoredValue> StoreBaseToValueMap;
+	typedef std::set<const llvm::Value*> ValueSet;
 
 	class Evaluator : public llvm::ValueVisitor<Evaluator, StoredValue> {
 	private:
@@ -156,11 +157,11 @@ namespace MemoryAccessPass {
 	class MemoryAccessData {
 	public:
 		Evaluator m_evaluator;
-		StoreBaseToValueMap stackStores;
-		StoreBaseToValueMap globalStores;
-		StoreBaseToValueMap argumentStores;
-		StoreBaseToValueMap heapStores;
-		StoreBaseToValueMap unknownStores;
+		ValueSet stackStores;
+		ValueSet globalStores;
+		ValueSet argumentStores;
+		ValueSet heapStores;
+		ValueSet unknownStores;
 		StoreBaseToValueMap temporaries;
 		StoreBaseToValueMap stores;
 		std::set<const llvm::CallInst *> functionCalls;

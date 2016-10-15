@@ -11,7 +11,7 @@ namespace MemoryAccessPass {
 bool isPredefinedFunction(llvm::Function & F);
 
 int MemoryAccessArgumentAccessWatermark = 10;
-int MemoryAccessGlobalAccessWatermark = 10;
+int MemoryAccessGlobalAccessWatermark = 0;
 int MemoryAccessFunctionCallCountWatermark = 10;
 int VisitBlockCountWatermark = 10;
 
@@ -222,10 +222,10 @@ bool MemoryAccessInstVisitor::isSummariseFunction() const {
 	if (functionData->argumentStores.size() > MemoryAccessArgumentAccessWatermark) {
 		return false;
 	}
-	for (StoreBaseToValueMap::const_iterator it = functionData->argumentStores.begin(),
-						ie = functionData->argumentStores.end();
+	for (ValueSet::const_iterator it = functionData->argumentStores.begin(),
+					ie = functionData->argumentStores.end();
 			it != ie; it++) {
-		const llvm::Value* key = it->first;
+		const llvm::Value* key = *it;
 		if (!llvm::isa<llvm::Argument>(key)) {
 			return false;
 		}
@@ -268,21 +268,19 @@ void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 	}
 	const llvm::Value * epointer = pointer.value;
 	StoredValue joinedValue = joinStoredValues(data.stores, epointer, value);
-	StoreBaseToValueMap * specialisedStores;
 	const StoredValueType pointerType = pointer.type;
 	if (pointerType == StoredValueTypeStack) {
-		specialisedStores = &(data.stackStores);
+		data.stackStores.insert(epointer);
 	} else if (pointerType == StoredValueTypeGlobal) {
-		specialisedStores = &(data.globalStores);
+		data.globalStores.insert(epointer);
 	} else if (pointerType == StoredValueTypeArgument) {
-		specialisedStores = &(data.argumentStores);
+		data.argumentStores.insert(epointer);
 	} else if (pointerType == StoredValueTypeHeap) {
-		specialisedStores = &(data.heapStores);
+		data.heapStores.insert(epointer);
 	} else {
 		//llvm::errs() << "This UNKNOWN is: " << pointer << "\n";
-		specialisedStores = &(data.unknownStores);
+		data.unknownStores.insert(epointer);
 	}
-	specialisedStores->insert(std::make_pair(epointer, joinedValue));
 }
 
 StoredValue MemoryAccessInstVisitor::joinStoredValues(
@@ -441,14 +439,14 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 	MemoryAccessData & data = *functionData;
 	// TODO(oanson) result value may be calculated wrongly.
 	bool result = false;
-	for (StoreBaseToValueMap::const_iterator it = calleeData.argumentStores.begin(),
+	for (ValueSet::const_iterator it = calleeData.argumentStores.begin(),
 						ie = calleeData.argumentStores.end();
 			it != ie; it++) {
-		const llvm::Value * argumentValue = it->first;
+		const llvm::Value * argumentValue = *it;
 		const llvm::Argument * argument = llvm::dyn_cast<llvm::Argument>(argumentValue);
 		if (!argument) {
 			//llvm::errs() << "Store to inner argument, but not an argument: " << *argumentValue << "\n";
-			data.unknownStores.insert(std::make_pair(it->first, it->second));
+			data.unknownStores.insert(argumentValue);
 			result = true;
 			continue;
 		}
@@ -457,7 +455,7 @@ bool MemoryAccessInstVisitor::joinCalleeArguments(const llvm::CallInst & ci,
 		StoredValue value = data.m_evaluator.visit(parameter);
 		if (value.isTop()) {
 			//llvm::errs() << "Store to inner argument, but operand is top: " << *parameter << "\n";
-			data.unknownStores.insert(std::make_pair(parameter, it->second));
+			data.unknownStores.insert(argumentValue);
 			result = true;
 			continue;
 		}

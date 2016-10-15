@@ -29,6 +29,7 @@ namespace MemoryAccessPass {
 		virtual void print(llvm::raw_ostream &O, const llvm::Module *M) const;
 		void print(llvm::raw_ostream &O, const MemoryAccessData & data) const;
 		void print(llvm::raw_ostream &O, const StoreBaseToValueMap & stores) const;
+		void print(llvm::raw_ostream &O, const MemoryAccessData & data, const ValueSet & stores) const;
 		void printAA(llvm::raw_ostream &O) const;
 
 		bool isSummariseFunction() const;
