@@ -60,7 +60,7 @@ namespace MemoryAccessPass {
 			return (value < other.value);
 		}
 		bool isTop() const {
-			return ((value == 0) && (type == StoredValueTypeUnknown));
+			return top == *this;
 		}
 		static StoredValue top;
 	};
