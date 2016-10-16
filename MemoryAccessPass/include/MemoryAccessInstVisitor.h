@@ -204,9 +204,6 @@ namespace MemoryAccessPass {
 				const MemoryAccessInstVisitor * visitor);
 		bool joinStoredValues(StoreBaseToValueMap & stores,
 				const llvm::Value * pointer, const StoredValue &value) const;
-		void insertNoDups(
-			StoredValues &fromValues,
-			StoredValues & toValues) const;
 	};
 }
 #endif // MEMORY_ACCESS_INST_VISITOR_H

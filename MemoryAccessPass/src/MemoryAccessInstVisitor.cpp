@@ -303,28 +303,6 @@ void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
 	}
 }
 
-void MemoryAccessInstVisitor::insertNoDups(
-		StoredValues &fromValues,
-		StoredValues & toValues) const {
-	StoredValues::iterator pos = toValues.begin();
-	StoredValues inserted;
-	for (StoredValues::iterator it = fromValues.begin(),
-					ie = fromValues.end();
-			it != ie; it++) {
-		pos = std::lower_bound(pos, toValues.end(), *it);
-		if (pos == toValues.end()) {
-			inserted.insert(inserted.end(), it, ie);
-			break;
-		}
-		if (*pos == *it) {
-			continue;
-		}
-		inserted.push_back(*it);
-		++pos;
-	}
-	toValues.insert(toValues.end(), inserted.begin(), inserted.end());
-}
-
 bool MemoryAccessInstVisitor::join(
 		const StoreBaseToValueMap & from,
 		StoreBaseToValueMap & to) const {
