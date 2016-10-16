@@ -45,25 +45,10 @@ StoredValue Evaluator::visitLoadInst(llvm::LoadInst & loadInst) {
 }
 
 StoredValue Evaluator::visitGetElementPtrInst(llvm::GetElementPtrInst & gepInst) {
-	bool isConstParams = true;
 	llvm::Value * pointer = gepInst.getPointerOperand();
-	StoredValue pointerStoredValue = visit(pointer);
-	for (llvm::User::op_iterator it = gepInst.idx_begin(),
-					ie = gepInst.idx_end();
-			it != ie; it++) {
-		llvm::Value * operand = *it;
-		StoredValue operandStoredValue = visit(operand);
-		if (operandStoredValue.type != StoredValueTypeConstant) {
-			isConstParams = false;
-			break;
-		}
-	}
-	StoredValueType pointerStoredValueType = isConstParams ?
-			pointerStoredValue.type : StoredValueTypeUnknown;
-	StoredValue result(&gepInst, pointerStoredValueType);
-	if (isConstParams) {
-		m_cache.insert(std::make_pair(&gepInst, result));
-	}
+	StoredValue result = visit(pointer);
+	result.value = &gepInst;
+	m_cache.insert(std::make_pair(&gepInst, result));
 	return result;
 }
 
