@@ -252,7 +252,7 @@ void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 		return;
 	}
 	const llvm::Value * epointer = pointer.value;
-	StoredValue joinedValue = joinStoredValues(data.stores, epointer, value);
+	data.stores[epointer] = value;
 	const StoredValueType pointerType = pointer.type;
 	if (pointerType == StoredValueTypeStack) {
 		data.stackStores.insert(epointer);
@@ -268,20 +268,23 @@ void MemoryAccessInstVisitor::store(MemoryAccessData & data,
 	}
 }
 
-StoredValue MemoryAccessInstVisitor::joinStoredValues(
+bool MemoryAccessInstVisitor::joinStoredValues(
 		StoreBaseToValueMap & stores,
 		const llvm::Value * epointer, const StoredValue &value) const {
 	StoreBaseToValueMap::iterator it = stores.find(epointer);
 	if (it == stores.end()) {
-		stores.insert(std::make_pair(epointer, value));
-		return value;
-	} else if (it->second != value) {
-		// Constant propogation - join -> top
-		it->second = StoredValue::top;
-		return StoredValue::top;
-	} else {
-		return value;
+		stores[epointer] = value;
+		return true;
 	}
+	if (it->second != value) {
+		// Constant propogation - join -> top
+		bool result = (it->second != StoredValue::top);
+		if (result) {
+			it->second = StoredValue::top;
+		}
+		return result;
+	}
+	return false;
 }
 
 void MemoryAccessInstVisitor::visitCallInst(llvm::CallInst & ci) {
@@ -329,9 +332,7 @@ bool MemoryAccessInstVisitor::join(
 	for (StoreBaseToValueMap::const_iterator it = from.begin(),
 							ie = from.end();
 			it != ie; it++) {
-		if (joinStoredValues(to, it->first, it->second) != it->second) {
-			result = true;
-		}
+		result |= joinStoredValues(to, it->first, it->second);
 	}
 	return result;
 }
@@ -374,10 +375,8 @@ bool MemoryAccessInstVisitor::join(const llvm::BasicBlock * from, const llvm::Ba
 void MemoryAccessInstVisitor::join(MemoryAccessCache * cache) {
 	assert((!functionData) && "MemoryAccessInstVisitor::join called more than once");
 	functionData = new MemoryAccessData();
-	for (llvm::Function::iterator it = function->begin(),
-				ie = function->end();
-			it != ie; it++) {
-		const MemoryAccessData &bb_data = getData(it);
+	if (!function->empty()) {
+		const MemoryAccessData &bb_data = getData(&function->back());
 		join(bb_data, *functionData);
 	}
 	if (!cache) {

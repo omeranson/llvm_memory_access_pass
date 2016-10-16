@@ -202,7 +202,7 @@ namespace MemoryAccessPass {
 		bool joinCall(const llvm::CallInst & ci, MemoryAccessCache * cache);
 		bool joinCalleeArguments(const llvm::CallInst & ci,
 				const MemoryAccessInstVisitor * visitor);
-		StoredValue joinStoredValues(StoreBaseToValueMap & stores,
+		bool joinStoredValues(StoreBaseToValueMap & stores,
 				const llvm::Value * pointer, const StoredValue &value) const;
 		void insertNoDups(
 			StoredValues &fromValues,
