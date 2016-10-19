@@ -43,12 +43,17 @@ namespace MemoryLocality {
 	};
 	typedef std::vector<WorkQueueItem> WorkQueueType;
 
+	class LocalityFunctionVisitor;
 	class MemoryLocality : public llvm::ModulePass {
 	protected:
 		EdgesType edges;
+		std::vector<LocalityFunctionVisitor *> localityVisitorsStack;
 
 		llvm::Function * getRoot(llvm::Module &M) const;
 		void addEdge(const std::string & u, const std::string & v);
+		void workOnItem(WorkQueueItem & item);
+		void visit();
+		void callAdded(WorkQueueItem & item);
 	public:
 		static char ID;
 		MemoryLocality() : llvm::ModulePass(ID) {};

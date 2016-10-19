@@ -14,6 +14,102 @@
 
 #define PHI_DEPTH_WATERMARK 10
 
+namespace llvm {
+class FunctionInstructionIterator {
+protected:
+	Function * F;
+	Function::iterator BBIter;
+	BasicBlock * BB;
+	BasicBlock::iterator InstIter;
+	Instruction * Inst;
+public:
+	FunctionInstructionIterator(Function & F) : F(&F), BBIter(F.end()), BB(0), Inst(0) {}
+	FunctionInstructionIterator(Function * F) : F(F), BBIter(F->end()), BB(0), Inst(0) {}
+	~FunctionInstructionIterator() {}
+	FunctionInstructionIterator begin() const {
+		FunctionInstructionIterator result(F);
+		result.BBIter = F->begin();
+		if (result.BBIter == F->end()) {
+			return result;
+		}
+		result.BB = &(*result.BBIter);
+		result.InstIter = result.BB->begin();
+		if (result.InstIter != result.BB->end()) {
+			result.Inst = &(*result.InstIter);
+		}
+		return result;
+	}
+	FunctionInstructionIterator end() const {
+		FunctionInstructionIterator result(F);
+		return result;
+	}
+
+	Instruction * operator*() {
+		assert((*this != end()) && "Attempting to dereference iterator at end");
+		return Inst;
+	}
+
+	FunctionInstructionIterator & operator++() {
+		assert((*this != end()) && "Attempting to increment iterator at end");
+		InstIter++;
+		while (InstIter == BB->end()) {
+			if (++BBIter == F->end()) {
+				BB = 0;
+				Inst = 0;
+				return *this;
+			}
+			BB = &(*BBIter);
+			InstIter = BB->begin();
+		}
+		Inst = &(*InstIter);
+		return *this;
+	}
+
+	FunctionInstructionIterator operator++(int) {
+		assert((*this != end()) && "Attempting to increment iterator at end");
+		FunctionInstructionIterator result(*this);
+		++(*this);
+		return result;
+	}
+
+	//operator--
+	//--operator
+
+	bool operator==(const FunctionInstructionIterator & other) const {
+		if (F != other.F) {
+			return false;
+		}
+		if (BBIter != other.BBIter) {
+			return false;
+		}
+		if (BBIter == F->end()) {
+			// The rest of the members are undefined in this case
+			return true;
+		}
+		if (BB != other.BB) {
+			// Should never happend. Will fail on prev. case.
+			return false;
+		}
+		if (InstIter != other.InstIter) {
+			return false;
+		}
+		if (Inst != other.Inst) {
+			// Should never happend. Will fail on prev. case.
+			return false;
+		}
+		return true;
+	}
+
+	bool operator!=(const FunctionInstructionIterator & other) const {
+		return !(other == *this);
+	}
+
+	bool atEnd() {
+		return (BBIter == F->end());
+	}
+};
+
+}
 namespace MemoryLocality {
 
 class MemoryDependenceAnalysis : public llvm::MemoryDependenceAnalysis {
@@ -223,15 +319,22 @@ struct PointerSourceEvaluator : public llvm::ValueVisitor<PointerSourceEvaluator
 
 struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisitor> {
 	PointerSourceEvaluator visitor;
-	WorkQueueType & workQueue;
-	WorkQueueItem & workItem;
+	PointerSource source;
+	WorkQueueItem workItem;
+	WorkQueueItem newWorkItem;
 	std::set<std::string> outgoingEdges;
+	llvm::FunctionInstructionIterator iterator;
+	llvm::Instruction * instruction;
+	bool isModified;
+	bool isCall;
+	bool isFinished;
 
 	LocalityFunctionVisitor(
-			WorkQueueType & workQueue, WorkQueueItem & item,
+			WorkQueueItem & item,
 			MemoryDependenceAnalysis * mda, llvm::AliasAnalysis * AA, llvm::DataLayout * DL, llvm::AllocIdentify * AI) : 
 					visitor(item.argumentSources, mda, AA, DL, AI),
-					workQueue(workQueue), workItem(item) {}
+					workItem(item),
+					iterator(*item.function) {}
 
 	PointerSource & evaluate(llvm::Value * value) {
 		// TODO Add caching
@@ -245,7 +348,7 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 	}
 
 	void evaluateAndStorePointerSource(llvm::Value * pointer) {
-		PointerSource & source = evaluate(pointer);
+		source = evaluate(pointer);
 		switch (source.type) {
 			case PointerSource_Primitive:
 			case PointerSource_Local:
@@ -265,6 +368,7 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 				llvm::errs() << "Couldn't evaluate source for " << *pointer << " in " << workItem.function->getName() << "\n";
 				break;
 		}
+		isModified = true;
 	}
 
 	void addEdge(const std::string & v) {
@@ -292,9 +396,9 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 		// arguments
 		// 1. Populate arguments
 		WorkQueueItem item;
-		item.function = calledFunction;
-		item.callers = workItem.callers;
-		if (!item.callers.insert(calledFunction).second) {
+		newWorkItem.function = calledFunction;
+		newWorkItem.callers = workItem.callers;
+		if (!newWorkItem.callers.insert(calledFunction).second) {
 			addEdge("Unknown locality (INACCURACY, Recursion)");
 			return;
 		}
@@ -302,13 +406,26 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 			llvm::Value * value = CI.getArgOperand(idx);
 			PointerSource & pointerSource = evaluate(value);
 			//llvm::errs() << "Argument " << calledFunction->getName()
-			//		<< "#" << item.argumentSources.size()
+			//		<< "#" << newWorkItem.argumentSources.size()
 			//		<< " is " << pointerSource.type << " "
 			//		<< pointerSource.name << "\n";
-			item.argumentSources.push_back(pointerSource);
+			newWorkItem.argumentSources.push_back(pointerSource);
 		}
 		// 2. Add to work queue
-		workQueue.push_back(item);
+		isCall = true;
+	}
+
+	void start() {
+		iterator = iterator.begin();
+		isFinished = iterator.atEnd();
+	}
+
+	void visitNext() {
+		isModified = false;
+		isCall = false;
+		instruction = *iterator;
+		visit(instruction);
+		isFinished = (++iterator).atEnd();
 	}
 };
 
@@ -337,8 +454,6 @@ bool MemoryLocality::runOnModule(llvm::Module &M) {
 	//const llvm::PassInfo * PI = lookupPassInfo(llvm::StringRef("basicaa"));
 	//printAAs(getResolver(), PI);
 
-	WorkQueueType workQueue;
-
 	WorkQueueItem rootItem;
 	rootItem.function = getRoot(M);
 	rootItem.argumentSources.push_back(PointerSource("argc", PointerSource_Global, 0));
@@ -346,29 +461,63 @@ bool MemoryLocality::runOnModule(llvm::Module &M) {
 	rootItem.argumentSources.push_back(PointerSource("envp", PointerSource_Global, 0));
 	assert(rootItem.function && "Could not find root function");
 	rootItem.callers.insert(rootItem.function);
-	workQueue.push_back(rootItem);
-
-	while (!workQueue.empty()) {
-		WorkQueueItem item = workQueue.back();
-		workQueue.pop_back();
-
-		MemoryDependenceAnalysis * mda = 0;
-		if (!item.function->isDeclaration()) {
-			mda = &getAnalysisID<MemoryDependenceAnalysis>(&llvm::MemoryDependenceAnalysis::ID, *item.function);
-			//printAAs(mda->getResolver(), PI);
-		}
-		LocalityFunctionVisitor visitor(workQueue, item, mda,
-				&getAnalysis<llvm::AliasAnalysis>(),
-				&getAnalysis<llvm::DataLayout>(),
-				&getAnalysis<llvm::AllocIdentify>());
-		visitor.visit(item.function);
-		for (std::set<std::string>::iterator it = visitor.outgoingEdges.begin(),
-							ie = visitor.outgoingEdges.end();
-				it != ie; it++) {
-			addEdge(item.function->getName(), *it);
-		}
+	callAdded(rootItem);
+	while (!localityVisitorsStack.empty()) {
+		visit();
 	}
 	return false;
+}
+
+void MemoryLocality::visit() {
+	LocalityFunctionVisitor * visitor = localityVisitorsStack.back();
+	visitor->visitNext();
+	if (visitor->isCall) {
+		callAdded(visitor->newWorkItem);
+		return;
+	}
+	if (visitor->isModified) {
+		PointerSource & source = visitor->source;
+		switch (source.type) {
+			case PointerSource_Primitive:
+			case PointerSource_Local:
+				// Do nothing;
+				break;
+			case PointerSource_Global:
+				addEdge(visitor->workItem.function->getName(), "Global objects");
+				break;
+			case PointerSource_Argument:
+				addEdge(visitor->workItem.function->getName(), "Unevaluated argument (ERROR)");
+				break;
+			case PointerSource_Function:
+				addEdge(visitor->workItem.function->getName(), source.name);
+				break;
+			case PointerSource_Unknown:
+				addEdge(visitor->workItem.function->getName(), "Unknown locality (INACCURACY, Pointer Evaluation)");
+				llvm::errs() << "Couldn't evaluate source for " << *(visitor->instruction) << " in " << visitor->workItem.function->getName() << "\n";
+				break;
+		}
+	}
+	if (visitor->isFinished) {
+		localityVisitorsStack.pop_back();
+		delete visitor;
+	}
+}
+
+void MemoryLocality::callAdded(WorkQueueItem & item) {
+	MemoryDependenceAnalysis * mda = 0;
+	if (!item.function->isDeclaration()) {
+		mda = &getAnalysisID<MemoryDependenceAnalysis>(&llvm::MemoryDependenceAnalysis::ID, *item.function);
+	}
+	LocalityFunctionVisitor * visitor = new LocalityFunctionVisitor(item, mda,
+			&getAnalysis<llvm::AliasAnalysis>(),
+			&getAnalysis<llvm::DataLayout>(),
+			&getAnalysis<llvm::AllocIdentify>());
+	visitor->start();
+	if (visitor->isFinished) {
+		delete visitor;
+	} else {
+		localityVisitorsStack.push_back(visitor);
+	}
 }
 
 llvm::Function * MemoryLocality::getRoot(llvm::Module &M) const {
