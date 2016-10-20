@@ -136,10 +136,11 @@ struct PointerSourceEvaluator : public llvm::ValueVisitor<PointerSourceEvaluator
 	llvm::AliasAnalysis * AA;
 	llvm::DataLayout * DL;
 	llvm::AllocIdentify * AI;
+	std::map<llvm::CallInst*, PointerSource> & callResults;
 	int phidepth;
 
-	PointerSourceEvaluator(std::vector<PointerSource> & arguments, MemoryDependenceAnalysis * mda, llvm::AliasAnalysis * AA, llvm::DataLayout * DL, llvm::AllocIdentify * AI) :
-			llvm::ValueVisitor<PointerSourceEvaluator>(), arguments(arguments), mda(mda), AA(AA), DL(DL), AI(AI), phidepth(0) {}
+	PointerSourceEvaluator(std::vector<PointerSource> & arguments, MemoryDependenceAnalysis * mda, llvm::AliasAnalysis * AA, llvm::DataLayout * DL, llvm::AllocIdentify * AI, std::map<llvm::CallInst*, PointerSource> & callResults) :
+			llvm::ValueVisitor<PointerSourceEvaluator>(), arguments(arguments), mda(mda), AA(AA), DL(DL), AI(AI), callResults(callResults), phidepth(0) {}
 	~PointerSourceEvaluator() {}
 	void clear() {
 		pointerSource.clear();
@@ -182,7 +183,7 @@ struct PointerSourceEvaluator : public llvm::ValueVisitor<PointerSourceEvaluator
 			if (AI->isAllocator(calledFunction->getName())) {
 				pointerSource.name = CI.getParent()->getParent()->getName();
 			} else {
-				pointerSource.name = calledFunction->getName();
+				pointerSource = callResults[&CI];
 			}
 		} else {
 			pointerSource.type = PointerSource_Unknown;
@@ -322,6 +323,7 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 	PointerSource source;
 	WorkQueueItem workItem;
 	WorkQueueItem newWorkItem;
+	PointerSource returnValueSource;
 	std::set<std::string> outgoingEdges;
 	llvm::FunctionInstructionIterator iterator;
 	llvm::Instruction * instruction;
@@ -331,8 +333,9 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 
 	LocalityFunctionVisitor(
 			WorkQueueItem & item,
-			MemoryDependenceAnalysis * mda, llvm::AliasAnalysis * AA, llvm::DataLayout * DL, llvm::AllocIdentify * AI) : 
-					visitor(item.argumentSources, mda, AA, DL, AI),
+			MemoryDependenceAnalysis * mda, llvm::AliasAnalysis * AA, llvm::DataLayout * DL, llvm::AllocIdentify * AI,
+			std::map<llvm::CallInst*, PointerSource> &callResults) : 
+					visitor(item.argumentSources, mda, AA, DL, AI, callResults),
 					workItem(item),
 					iterator(*item.function) {}
 
@@ -377,6 +380,7 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 		// arguments
 		// 1. Populate arguments
 		newWorkItem.clear();
+		newWorkItem.callInst = &CI;
 		newWorkItem.function = calledFunction;
 		newWorkItem.callers = workItem.callers;
 		if (!newWorkItem.callers.insert(calledFunction).second) {
@@ -394,6 +398,14 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 		}
 		// 2. Add to work queue
 		isCall = true;
+	}
+
+	void visitReturnInst(llvm::ReturnInst & RI) {
+		// TODO Join, not overwrite
+		llvm::Value * value = RI.getReturnValue();
+		if (value) {
+			returnValueSource = evaluate(value);
+		}
 	}
 
 	void start() {
@@ -463,21 +475,22 @@ void MemoryLocality::visit() {
 				// Do nothing;
 				break;
 			case PointerSource_Global:
-				addEdge(visitor->workItem.function->getName(), "Global objects");
+				//addEdge(visitor->workItem.function->getName(), "Global objects");
 				break;
 			case PointerSource_Argument:
-				addEdge(visitor->workItem.function->getName(), "Unevaluated argument (ERROR)");
+				//addEdge(visitor->workItem.function->getName(), "Unevaluated argument (ERROR)");
 				break;
 			case PointerSource_Function:
 				addEdge(visitor->workItem.function->getName(), source.name);
 				break;
 			case PointerSource_Unknown:
-				addEdge(visitor->workItem.function->getName(), "Unknown locality (INACCURACY, Pointer Evaluation)");
+				//addEdge(visitor->workItem.function->getName(), "Unknown locality (INACCURACY, Pointer Evaluation)");
 				llvm::errs() << "Couldn't evaluate source for " << *(visitor->instruction) << " in " << visitor->workItem.function->getName() << "\n";
 				break;
 		}
 	}
 	if (visitor->isFinished) {
+		callResults[visitor->workItem.callInst] = visitor->returnValueSource;
 		localityVisitorsStack.pop_back();
 		delete visitor;
 	}
@@ -491,7 +504,8 @@ void MemoryLocality::callAdded(WorkQueueItem & item) {
 	LocalityFunctionVisitor * visitor = new LocalityFunctionVisitor(item, mda,
 			&getAnalysis<llvm::AliasAnalysis>(),
 			&getAnalysis<llvm::DataLayout>(),
-			&getAnalysis<llvm::AllocIdentify>());
+			&getAnalysis<llvm::AllocIdentify>(),
+			callResults);
 	visitor->start();
 	if (visitor->isFinished) {
 		delete visitor;
@@ -517,6 +531,10 @@ void MemoryLocality::addEdge(const std::string & u, const std::string & v) {
 
 void MemoryLocality::print(llvm::raw_ostream &O, const llvm::Module *M) const {
 	O << "digraph Locality {\n";
+	for (llvm::Module::const_iterator it = M->begin(), ie = M->end();
+			it != ie; it++) {
+		O << "\t\"" << it->getName() << "\";\n";
+	}
 	for (EdgesType::const_iterator it = edges.begin(), ie = edges.end();
 			it != ie; it++) {
 		for (std::set<std::string>::const_iterator vit = it->second.begin(),

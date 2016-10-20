@@ -39,11 +39,13 @@ namespace MemoryLocality {
 	struct WorkQueueItem {
 		std::set<llvm::Function *> callers;
 		llvm::Function * function;
+		llvm::CallInst * callInst;
 		std::vector<PointerSource> argumentSources;
 
 		void clear() {
 			callers.clear();
 			function = 0;
+			callInst = 0;
 			argumentSources.clear();
 		}
 	};
@@ -54,6 +56,7 @@ namespace MemoryLocality {
 	protected:
 		EdgesType edges;
 		std::vector<LocalityFunctionVisitor *> localityVisitorsStack;
+		std::map<llvm::CallInst*, PointerSource> callResults;
 
 		llvm::Function * getRoot(llvm::Module &M) const;
 		void addEdge(const std::string & u, const std::string & v);
