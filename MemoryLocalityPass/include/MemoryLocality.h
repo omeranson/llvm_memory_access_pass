@@ -23,7 +23,7 @@ namespace MemoryLocality {
 		PointerSourceType type;
 		llvm::Argument * argument;
 
-		PointerSource() {}
+		PointerSource() : type(PointerSource_Unknown) {}
 		PointerSource(const std::string & name, PointerSourceType type, llvm::Argument * argument) :
 				name(name), type(type), argument(argument) {}
 
@@ -40,6 +40,12 @@ namespace MemoryLocality {
 		std::set<llvm::Function *> callers;
 		llvm::Function * function;
 		std::vector<PointerSource> argumentSources;
+
+		void clear() {
+			callers.clear();
+			function = 0;
+			argumentSources.clear();
+		}
 	};
 	typedef std::vector<WorkQueueItem> WorkQueueType;
 

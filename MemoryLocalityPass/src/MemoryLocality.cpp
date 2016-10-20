@@ -104,7 +104,7 @@ public:
 		return !(other == *this);
 	}
 
-	bool atEnd() {
+	bool atEnd() const {
 		return (BBIter == F->end());
 	}
 };
@@ -349,25 +349,6 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 
 	void evaluateAndStorePointerSource(llvm::Value * pointer) {
 		source = evaluate(pointer);
-		switch (source.type) {
-			case PointerSource_Primitive:
-			case PointerSource_Local:
-				// Do nothing;
-				break;
-			case PointerSource_Global:
-				addEdge("Global objects");
-				break;
-			case PointerSource_Argument:
-				addEdge("Unevaluated argument (ERROR)");
-				break;
-			case PointerSource_Function:
-				addEdge(source.name);
-				break;
-			case PointerSource_Unknown:
-				addEdge("Unknown locality (INACCURACY, Pointer Evaluation)");
-				llvm::errs() << "Couldn't evaluate source for " << *pointer << " in " << workItem.function->getName() << "\n";
-				break;
-		}
 		isModified = true;
 	}
 
@@ -395,7 +376,7 @@ struct LocalityFunctionVisitor : public llvm::InstVisitor<LocalityFunctionVisito
 		// Found this function. Add it to the work queue, with all its
 		// arguments
 		// 1. Populate arguments
-		WorkQueueItem item;
+		newWorkItem.clear();
 		newWorkItem.function = calledFunction;
 		newWorkItem.callers = workItem.callers;
 		if (!newWorkItem.callers.insert(calledFunction).second) {
@@ -473,7 +454,6 @@ void MemoryLocality::visit() {
 	visitor->visitNext();
 	if (visitor->isCall) {
 		callAdded(visitor->newWorkItem);
-		return;
 	}
 	if (visitor->isModified) {
 		PointerSource & source = visitor->source;
